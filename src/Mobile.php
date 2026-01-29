@@ -141,7 +141,7 @@ class Mobile
      */
     public function updateContipayURL(string $dev = 'https://api-uat.contipay.net', string $live = 'https://api.contipay.net'): self
     {
-        $this->contipay->updateUrl($dev, $live);
+        $this->contipay->updateURL($dev, $live);
         return $this;
     }
 
