@@ -28,6 +28,9 @@ require_once __DIR__ . '/vendor/autoload.php';
 // Initialize the SDK
 $contipay = new Mobile('your_api_key', 'your_api_secret');
 
+ // update Contipay URL (optional)
+$contipay->updateContipayURL('new-dev-url', 'new-live-url');
+
 // Process a payment
 $response = $contipay->mobile([
     'amount' => '50.00',

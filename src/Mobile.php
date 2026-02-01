@@ -92,9 +92,6 @@ class Mobile
         $this->contipay = new Core($apiKey, $apiSecret);
         $this->mode = $mode ?? 'dev';
         $this->method = $method ?? 'direct';
-
-        // force update to new Contipay
-        $this->updateContipayURL();
     }
 
     /**
