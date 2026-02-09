@@ -68,8 +68,8 @@ class Mobile
             'required' => ['amount', 'currency', 'phone', 'reference'],
         ],
         'innbucks' => [
-            'name' => 'Omari',
-            'code' => 'OC',
+            'name' => 'InnBucks',
+            'code' => 'IB',
             'required' => ['amount', 'currency', 'phone', 'reference'],
         ],
         'mobile' => [
