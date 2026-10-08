@@ -379,6 +379,8 @@ $result = json_decode($response, true);
 
 An empty reference throws an `InvalidArgumentException`. API errors are returned as JSON with a `status` and `message`.
 
+> **Note:** status lookups need a `nigel/contipay-php` release that provides them. On older core versions these methods return an error JSON instead of a status.
+
 ## Security
 
 - All API requests are encrypted using TLS

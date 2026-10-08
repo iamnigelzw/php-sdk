@@ -42,6 +42,13 @@ trait HasStatus
             throw new \InvalidArgumentException("Missing required field: reference");
         }
 
+        if (!method_exists($this->contipay, $method)) {
+            return json_encode([
+                'status' => 'error',
+                'message' => "Status lookups are not supported by the installed nigel/contipay-php version"
+            ]);
+        }
+
         try {
             return $this->contipay
                 ->setAppMode($this->mode)
