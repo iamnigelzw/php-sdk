@@ -2,7 +2,7 @@
 
 namespace ContiPay\PhpSdk;
 
-use Contipay\Core\Contipay as Core;
+use ContiPay\PhpSdk\Core\Client as Core;
 use Contipay\Helpers\Payload\PayloadGenerator;
 use ContiPay\PhpSdk\Concerns\HasStatus;
 

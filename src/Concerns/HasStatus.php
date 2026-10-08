@@ -13,46 +13,41 @@ trait HasStatus
      */
     public function getTransactionStatus(string $reference): string
     {
-        return $this->checkStatus('transactionStatus', $reference);
+        return $this->checkStatus('acquire/payment', $reference);
     }
 
     /**
      * Get the status of a disbursement by its reference.
      *
      * @param string $reference Disbursement reference
+     * @param string|null $providerCode Optional provider code to narrow the lookup, e.g. 'EC'
      * @throws \InvalidArgumentException
      * @return string JSON-encoded status response or error
      */
-    public function getDisbursementStatus(string $reference): string
+    public function getDisbursementStatus(string $reference, ?string $providerCode = null): string
     {
-        return $this->checkStatus('disbursementStatus', $reference);
+        return $this->checkStatus('disburse/payment', $reference, ['providerCode' => $providerCode]);
     }
 
     /**
      * Query the Contipay status endpoint for the given reference.
      *
-     * @param string $method    Core status method to call
+     * @param string $endpoint  Status endpoint to query
      * @param string $reference Transaction reference
+     * @param array  $extra     Additional query parameters
      * @throws \InvalidArgumentException
      * @return string JSON-encoded status response or error
      */
-    protected function checkStatus(string $method, string $reference): string
+    protected function checkStatus(string $endpoint, string $reference, array $extra = []): string
     {
         if (empty($reference)) {
             throw new \InvalidArgumentException("Missing required field: reference");
         }
 
-        if (!method_exists($this->contipay, $method)) {
-            return json_encode([
-                'status' => 'error',
-                'message' => "Status lookups are not supported by the installed nigel/contipay-php version"
-            ]);
-        }
-
         try {
             return $this->contipay
                 ->setAppMode($this->mode)
-                ->{$method}($reference);
+                ->queryStatus($endpoint, $reference, $this->merchantId ?? null, $extra);
         } catch (\Throwable $th) {
             return json_encode([
                 'status' => 'error',

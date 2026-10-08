@@ -367,6 +367,7 @@ $status = $disbursement->getDisbursementStatus($reference);
 use ContiPay\PhpSdk\Mobile;
 
 $contipay = new Mobile('your-api-key', 'your-api-secret', 'dev');
+$contipay->setMerchantId(123); // required by ContiPay for status lookups
 
 // Status of a payment
 $response = $contipay->getTransactionStatus('TXN-12345');
@@ -374,12 +375,15 @@ $response = $contipay->getTransactionStatus('TXN-12345');
 // Status of a disbursement
 $response = $contipay->getDisbursementStatus('DISB-12345');
 
+// Optionally narrow a disbursement lookup to a provider
+$response = $contipay->getDisbursementStatus('DISB-12345', 'EC');
+
 $result = json_decode($response, true);
 ```
 
 An empty reference throws an `InvalidArgumentException`. API errors are returned as JSON with a `status` and `message`.
 
-> **Note:** status lookups need a `nigel/contipay-php` release that provides them. On older core versions these methods return an error JSON instead of a status.
+Payment status calls `GET /acquire/payment?merchantRef=...&merchantId=...` and disbursement status calls `GET /disburse/payment?merchantRef=...&merchantId=...`, adding `&providerCode=...` when you pass one. Both use the same API key and secret as payments, and send the merchant ID set with `setMerchantId()`.
 
 ## Security
 
