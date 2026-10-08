@@ -24,7 +24,7 @@ class Mobile
      * Webhook URL of the Contipay instance
      * @var string
      */
-    protected string $webhookUrl;
+    protected string $webhookUrl = '';
     /**
      * Success URL of the Contipay instance
      * @var string
@@ -33,12 +33,12 @@ class Mobile
      * Success URL of the Contipay instance
      * @var string
      */
-    protected string $successUrl;
+    protected string $successUrl = '';
     /**
      * Error URL of the Contipay instance
      * @var string
      */
-    protected string $errorUrl;
+    protected string $errorUrl = '';
     /**
      * Merchant ID of the Contipay instance
      * @var int
@@ -90,7 +90,7 @@ class Mobile
         string $apiKey,
         string $apiSecret,
         ?string $mode = null,
-        ?string $method = null,
+        ?string $method = null
     ) {
         $this->contipay = new Core($apiKey, $apiSecret);
         $this->mode = $mode ?? 'dev';
@@ -251,7 +251,7 @@ class Mobile
         string $reference = '',
         string $description = 'Donation',
         string $providerName = 'EcoCash',
-        string $providerCode = 'EC',
+        string $providerCode = 'EC'
     ): string {
 
         $payload = $this->method == 'direct' ? (new PayloadGenerator(
@@ -266,12 +266,12 @@ class Mobile
                 $reference,
                 $description
             ) :
-            (new PayloadGenerator(
+            ((new PayloadGenerator(
                 $this->getMerchantId(),
                 $this->getWebhookUrl(),
                 $this->getSuccessUrl(),
                 $this->getErrorUrl()
-            )->simpleRedirectPayload(
+            ))->simpleRedirectPayload(
                     $amount,
                     $phone
                 ));

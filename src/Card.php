@@ -24,17 +24,17 @@ class Card
      * Webhook URL of the Contipay instance
      * @var string
      */
-    protected string $webhookUrl;
+    protected string $webhookUrl = '';
     /**
      * Success URL of the Contipay instance
      * @var string
      */
-    protected string $successUrl;
+    protected string $successUrl = '';
     /**
      * Error URL of the Contipay instance
      * @var string
      */
-    protected string $errorUrl;
+    protected string $errorUrl = '';
 
     /**
      * Merchant ID of the Contipay instance
@@ -265,7 +265,7 @@ class Card
         string $reference = '',
         string $description = 'Donation',
         string $providerName = 'EcoCash',
-        string $providerCode = 'EC',
+        string $providerCode = 'EC'
     ): string {
         $payload = $this->method == 'direct' ? (
             new PayloadGenerator(

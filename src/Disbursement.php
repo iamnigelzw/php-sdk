@@ -81,7 +81,7 @@ class Disbursement
         string $apiKey,
         string $apiSecret,
         string $privateKey,
-        ?string $mode = null,
+        ?string $mode = null
     ) {
         $this->contipay = new Core($apiKey, $apiSecret);
         $this->privateKey = $this->loadPrivateKey($privateKey);
@@ -211,7 +211,7 @@ class Disbursement
         string $accountName = '-',
         string $firstName = '-',
         string $lastName = '-',
-        string $email = '',
+        string $email = ''
     ): string {
         try {
             $payload = (new PayloadGenerator(
@@ -245,7 +245,7 @@ class Disbursement
      */
     protected function loadPrivateKey(string $privateKey): string
     {
-        if (!str_contains($privateKey, '-----BEGIN') && is_file($privateKey)) {
+        if (strpos($privateKey, '-----BEGIN') === false && is_file($privateKey)) {
             $privateKey = (string) file_get_contents($privateKey);
         }
 
