@@ -293,6 +293,26 @@ try {
 }
 ```
 
+## Transaction Status
+
+Both `Mobile` and `Card` can look up the status of a payment or disbursement by its reference. The lookup uses the instance's mode (`dev`/`live`) and any URLs set with `updateContipayURL()`.
+
+```php
+use ContiPay\PhpSdk\Mobile;
+
+$contipay = new Mobile('your-api-key', 'your-api-secret', 'dev');
+
+// Status of a payment
+$response = $contipay->getTransactionStatus('TXN-12345');
+
+// Status of a disbursement
+$response = $contipay->getDisbursementStatus('DISB-12345');
+
+$result = json_decode($response, true);
+```
+
+An empty reference throws an `InvalidArgumentException`. API errors are returned as JSON with a `status` and `message`.
+
 ## Security
 
 - All API requests are encrypted using TLS

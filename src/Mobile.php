@@ -4,9 +4,12 @@ namespace ContiPay\PhpSdk;
 
 use Contipay\Core\Contipay as Core;
 use Contipay\Helpers\Payload\PayloadGenerator;
+use ContiPay\PhpSdk\Concerns\HasStatus;
 
 class Mobile
 {
+    use HasStatus;
+
     /**
      * Contipay instance
      * @var Core|null

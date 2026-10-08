@@ -1,10 +1,10 @@
 {
-    "version": "1.0.6",
+    "version": "1.0.7",
     "name": "contipay/php-sdk",
     "description": "The Contipay PHP Client provides a simple and secure way to integrate Contipay payments into any PHP application",
     "type": "library",
     "require": {
-        "nigel/contipay-php": "^2.0"
+        "nigel/contipay-php": "^2.1"
     },
     "license": "MIT",
     "autoload": {
