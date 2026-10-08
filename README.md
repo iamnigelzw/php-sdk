@@ -64,9 +64,10 @@ $response = $contipay->card([
 
 ### Basic Setup
 
-The SDK provides two main classes:
+The SDK provides three main classes:
 - `Mobile` - For mobile money payments
 - `Card` - For card payments
+- `Disbursement` - For sending money to mobile wallets (see [Disbursements](#disbursements))
 
 ```php
 <?php
@@ -293,9 +294,74 @@ try {
 }
 ```
 
+## Disbursements
+
+Use `Disbursement` to send money from your merchant account to a mobile wallet. Every disbursement is signed with your merchant private key, so pass it when you create the instance. You can pass the PEM string itself or a path to a `.pem` file. An invalid key throws an `InvalidArgumentException`.
+
+```php
+new Disbursement($apiKey, $apiSecret, $privateKey, $mode);
+```
+
+| Parameter | Description | Options | Default |
+|-----------|-------------|----------|---------|
+| `$apiKey` | Your ContiPay API key | - | Required |
+| `$apiSecret` | Your ContiPay API secret | - | Required |
+| `$privateKey` | PEM private key or path to a `.pem` file | - | Required |
+| `$mode` | Environment mode | `dev`, `live` | `dev` |
+
+### Supported Providers
+
+* **EcoCash** (`$disbursement->ecocash([...])`)
+* **OneMoney** (`$disbursement->onemoney([...])`)
+* **Omari** (`$disbursement->omari([...])`)
+* **InnBucks** (`$disbursement->innbucks([...])`)
+* **All In One** (`$disbursement->mobile([...])`, which needs `provider` and `code` from the [provider table](#provider-code--name-options))
+
+### Example: Send a Disbursement
+
+```php
+<?php
+
+use ContiPay\PhpSdk\Disbursement;
+
+require_once __DIR__ . '/vendor/autoload.php';
+
+$disbursement = new Disbursement(
+    'your_api_key',
+    'your_api_secret',
+    __DIR__ . '/keys/contipay-private.pem', // or the PEM string
+    'dev'
+);
+
+$disbursement->setMerchantId(12345)
+    ->setWebhookUrl('https://your-domain.com/webhook');
+
+$reference = uniqid('DISB-');
+
+$response = $disbursement->ecocash([
+    'amount' => '20.00',
+    'currency' => 'USD',
+    'phone' => '0782000340',
+    'reference' => $reference,
+    // optional
+    'accountName' => 'Nigel Jaure',
+    'firstName' => 'Nigel',
+    'lastName' => 'Jaure',
+    'email' => 'nigel@example.com',
+    'description' => 'Salary payout',
+]);
+
+$result = json_decode($response, true);
+
+// Check the disbursement later
+$status = $disbursement->getDisbursementStatus($reference);
+```
+
+`amount`, `currency`, `phone` and `reference` are required. A missing field throws an `InvalidArgumentException`. API errors are returned as JSON with a `status` and `message`.
+
 ## Transaction Status
 
-Both `Mobile` and `Card` can look up the status of a payment or disbursement by its reference. The lookup uses the instance's mode (`dev`/`live`) and any URLs set with `updateContipayURL()`.
+`Mobile`, `Card` and `Disbursement` can look up the status of a payment or disbursement by its reference. The lookup uses the instance's mode (`dev`/`live`) and any URLs set with `updateContipayURL()`.
 
 ```php
 use ContiPay\PhpSdk\Mobile;
