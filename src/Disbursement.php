@@ -112,6 +112,10 @@ class Disbursement
             }
         }
 
+        if (!is_numeric($fields['amount'])) {
+            throw new \InvalidArgumentException("Invalid amount: '{$fields['amount']}' is not a number");
+        }
+
         return $this->processDisbursement(
             $fields['amount'],
             $fields['currency'],
@@ -177,10 +181,15 @@ class Disbursement
     /**
      * Get the merchant ID.
      *
+     * @throws \LogicException If no merchant ID has been set
      * @return int
      */
     public function getMerchantId(): int
     {
+        if (!isset($this->merchantId)) {
+            throw new \LogicException('Call setMerchantId() before making a request.');
+        }
+
         return $this->merchantId;
     }
 
@@ -198,6 +207,7 @@ class Disbursement
      * @param string $firstName    Recipient first name
      * @param string $lastName     Recipient last name
      * @param string $email        Recipient email
+     * @throws \LogicException If no merchant ID has been set
      * @return string JSON-encoded disbursement response or error
      */
     public function processDisbursement(
@@ -213,15 +223,17 @@ class Disbursement
         string $lastName = '-',
         string $email = ''
     ): string {
+        $merchantId = $this->getMerchantId();
+
         try {
             $payload = (new PayloadGenerator(
-                $this->getMerchantId(),
+                $merchantId,
                 $this->getWebhookUrl(),
             ))
                 ->setUpCustomer($firstName, $lastName, $phone, 'ZW', $email)
                 ->setUpProviders($providerName, $providerCode)
                 ->setUpAccountDetails($phone, $accountName)
-                ->setUpTransaction((float) $amount, $currency, $reference, $description)
+                ->setUpTransaction($amount, $currency, $reference, $description)
                 ->directPayload();
 
             return $this->contipay

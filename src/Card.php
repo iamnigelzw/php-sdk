@@ -113,6 +113,10 @@ class Card
             }
         }
 
+        if (!is_numeric($fields['amount'])) {
+            throw new \InvalidArgumentException("Invalid amount: '{$fields['amount']}' is not a number");
+        }
+
         return $this->processPayment(
             $fields['firstName'] ?? '',
             $fields['lastName'] ?? '',
@@ -227,10 +231,15 @@ class Card
     /**
      * Get the merchant ID.
      *
+     * @throws \LogicException If no merchant ID has been set
      * @return int
      */
     public function getMerchantId(): int
     {
+        if (!isset($this->merchantId)) {
+            throw new \LogicException('Call setMerchantId() before making a request.');
+        }
+
         return $this->merchantId;
     }
 
@@ -249,6 +258,7 @@ class Card
      * @param string $country     Customer country code (default: 'ZW')
      * @param string $reference   Payment reference (optional)
      * @param string $description Payment description (optional)
+     * @throws \LogicException If no merchant ID has been set
      * @return string JSON-encoded payment response or error    
      */
     public function processPayment(
@@ -267,29 +277,31 @@ class Card
         string $providerName = 'EcoCash',
         string $providerCode = 'EC'
     ): string {
-        $payload = $this->method == 'direct' ? (
-            new PayloadGenerator(
-                $this->getMerchantId(),
-                $this->getWebhookUrl()
-            )
-        )->setUpCustomer($firstName, $lastName, $phone, $country, $email)
-            ->setUpProviders($providerName, $providerCode)
-            ->setUpAccountDetails($accountNumber ?: $phone, "$firstName $lastName", $accountExpiry, $cvv)
-            ->setUpTransaction($amount, $currency, $reference, $description)
-            ->directPayload()
-
-            : (
-                new PayloadGenerator(
-                    $this->getMerchantId(),
-                    $this->getWebhookUrl(),
-                    $this->getSuccessUrl(),
-                    $this->getErrorUrl()
-                )
-            )->setUpCustomer($firstName, $lastName, $phone, $country, $email)
-                ->setUpTransaction($amount, $currency, $reference, $description)
-                ->redirectPayload();
+        $merchantId = $this->getMerchantId();
 
         try {
+            $payload = $this->method == 'direct' ? (
+                new PayloadGenerator(
+                    $merchantId,
+                    $this->getWebhookUrl()
+                )
+            )->setUpCustomer($firstName, $lastName, $phone, $country, $email)
+                ->setUpProviders($providerName, $providerCode)
+                ->setUpAccountDetails($accountNumber ?: $phone, "$firstName $lastName", $accountExpiry, $cvv)
+                ->setUpTransaction($amount, $currency, $reference, $description)
+                ->directPayload()
+
+                : (
+                    new PayloadGenerator(
+                        $merchantId,
+                        $this->getWebhookUrl(),
+                        $this->getSuccessUrl(),
+                        $this->getErrorUrl()
+                    )
+                )->setUpCustomer($firstName, $lastName, $phone, $country, $email)
+                    ->setUpTransaction($amount, $currency, $reference, $description)
+                    ->redirectPayload();
+
             $response = $this->contipay
                 ->setAppMode($this->mode)
                 ->setPaymentMethod($this->method)

@@ -281,7 +281,7 @@ class Client
     protected function errorResponse(string $message): string
     {
         return json_encode([
-            'status' => 'Error',
+            'status' => 'error',
             'message' => $message,
         ], JSON_INVALID_UTF8_SUBSTITUTE);
     }

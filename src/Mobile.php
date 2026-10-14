@@ -120,6 +120,10 @@ class Mobile
             }
         }
 
+        if (!is_numeric($fields['amount'])) {
+            throw new \InvalidArgumentException("Invalid amount: '{$fields['amount']}' is not a number");
+        }
+
         return $this->processPayment(
             $fields['amount'] ?? '0',
             $fields['currency'] ?? 'USD',
@@ -227,10 +231,15 @@ class Mobile
     /**
      * Get the merchant ID.
      *
+     * @throws \LogicException If no merchant ID has been set
      * @return int
      */
     public function getMerchantId(): int
     {
+        if (!isset($this->merchantId)) {
+            throw new \LogicException('Call setMerchantId() before making a request.');
+        }
+
         return $this->merchantId;
     }
 
@@ -242,6 +251,7 @@ class Mobile
      * @param string $phone       Payer phone number
      * @param string $reference   Payment reference (optional)
      * @param string $description Payment description (optional)
+     * @throws \LogicException If no merchant ID has been set
      * @return string JSON-encoded payment response or error
      */
     public function processPayment(
@@ -253,34 +263,34 @@ class Mobile
         string $providerName = 'EcoCash',
         string $providerCode = 'EC'
     ): string {
+        $merchantId = $this->getMerchantId();
 
-        $payload = $this->method == 'direct' ? (new PayloadGenerator(
-            $this->getMerchantId(),
-            $this->getWebhookUrl(),
-        ))
-            ->setUpProviders($providerName, $providerCode)
-            ->simpleDirectPayload(
-                $amount,
-                $phone,
-                $currency,
-                $reference,
-                $description
-            ) :
-            ((new PayloadGenerator(
-                $this->getMerchantId(),
+        try {
+            $payload = $this->method == 'direct' ? (new PayloadGenerator(
+                $merchantId,
                 $this->getWebhookUrl(),
-                $this->getSuccessUrl(),
-                $this->getErrorUrl()
-            ))->simpleRedirectPayload(
+            ))
+                ->setUpProviders($providerName, $providerCode)
+                ->simpleDirectPayload(
                     $amount,
                     $phone,
                     $currency,
                     $reference,
                     $description
-                ));
+                ) :
+                ((new PayloadGenerator(
+                    $merchantId,
+                    $this->getWebhookUrl(),
+                    $this->getSuccessUrl(),
+                    $this->getErrorUrl()
+                ))->simpleRedirectPayload(
+                        $amount,
+                        $phone,
+                        $currency,
+                        $reference,
+                        $description
+                    ));
 
-
-        try {
             $response = $this->contipay
                 ->setAppMode($this->mode)
                 ->setPaymentMethod($this->method)
