@@ -7,6 +7,11 @@ A simple and secure PHP SDK for integrating payments with the ContiPay platform.
 [![Why PHP](https://img.shields.io/badge/Why_PHP-in_2026-7A86E8?style=flat&labelColor=18181b)](https://whyphp.dev)
 
 
+## Requirements
+
+- PHP 8.1 or newer, with the `json` and `openssl` extensions
+- A ContiPay merchant account with an API key and secret
+
 ##  Installation
 
 Install the package via Composer:
@@ -14,6 +19,8 @@ Install the package via Composer:
 ```bash
 composer require contipay/php-sdk
 ```
+
+If you are on PHP 7.4 or 8.0, stay on 1.x: `composer require contipay/php-sdk:^1.2`.
 
 ##  Quick Start
 

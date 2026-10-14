@@ -3,7 +3,7 @@
 namespace ContiPay\PhpSdk;
 
 use ContiPay\PhpSdk\Core\Client as Core;
-use Contipay\Helpers\Payload\PayloadGenerator;
+use ContiPay\PhpSdk\Payload\PayloadGenerator;
 use ContiPay\PhpSdk\Concerns\HasStatus;
 
 class Mobile
@@ -273,7 +273,10 @@ class Mobile
                 $this->getErrorUrl()
             ))->simpleRedirectPayload(
                     $amount,
-                    $phone
+                    $phone,
+                    $currency,
+                    $reference,
+                    $description
                 ));
 
 

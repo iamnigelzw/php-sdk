@@ -3,7 +3,7 @@
 namespace ContiPay\PhpSdk;
 
 use ContiPay\PhpSdk\Core\Client as Core;
-use Contipay\Helpers\Payload\PayloadGenerator;
+use ContiPay\PhpSdk\Payload\PayloadGenerator;
 use ContiPay\PhpSdk\Concerns\HasStatus;
 
 class Card
@@ -286,9 +286,8 @@ class Card
                     $this->getErrorUrl()
                 )
             )->setUpCustomer($firstName, $lastName, $phone, $country, $email)
-                ->setUpTransaction($amount, $currency)
+                ->setUpTransaction($amount, $currency, $reference, $description)
                 ->redirectPayload();
-        ;
 
         try {
             $response = $this->contipay

@@ -2,6 +2,8 @@
 
 namespace ContiPay\PhpSdk\Concerns;
 
+use ContiPay\PhpSdk\Core\Client;
+
 trait HasStatus
 {
     /**
@@ -13,7 +15,7 @@ trait HasStatus
      */
     public function getTransactionStatus(string $reference): string
     {
-        return $this->checkStatus('acquire/payment', $reference);
+        return $this->checkStatus(Client::ACQUIRE_ENDPOINT, $reference);
     }
 
     /**
@@ -26,7 +28,7 @@ trait HasStatus
      */
     public function getDisbursementStatus(string $reference, ?string $providerCode = null): string
     {
-        return $this->checkStatus('disburse/payment', $reference, ['providerCode' => $providerCode]);
+        return $this->checkStatus(Client::DISBURSE_ENDPOINT, $reference, ['providerCode' => $providerCode]);
     }
 
     /**
