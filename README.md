@@ -76,6 +76,7 @@ $response = $contipay->card([
 The SDK provides these main classes:
 - `Mobile` - For mobile money payments
 - `Card` - For card payments
+- `Checkout` - For sending customers to ContiPay's hosted payment page (see [Hosted Checkout](#hosted-checkout))
 - `Disbursement` - For sending money to mobile wallets (see [Disbursements](#disbursements))
 - `Webhook` - For reading payment notifications (see [Webhooks](#webhooks))
 
@@ -313,6 +314,64 @@ try {
     // Handle error
 }
 ```
+
+## Hosted Checkout
+
+Use `Checkout` to send the customer to ContiPay's payment page, where they choose how to pay. You never handle card or wallet details yourself.
+
+```php
+<?php
+
+use ContiPay\PhpSdk\Checkout;
+
+require_once __DIR__ . '/vendor/autoload.php';
+
+$checkout = new Checkout('your_api_key', 'your_api_secret', 'live');
+
+$checkout->setMerchantId(12345)
+    ->setWebhookUrl('https://your-domain.com/webhook')
+    ->setSuccessUrl('https://your-domain.com/success')
+    ->setCancelUrl('https://your-domain.com/cancel');
+
+$session = $checkout->create([
+    'amount' => '50.00',
+    'currency' => 'USD',
+    'phone' => '0782000340',
+    'reference' => 'ORDER-1001',
+    'description' => 'Order #1001',
+]);
+
+if ($session->successful()) {
+    header('Location: ' . $session->url());
+    exit;
+}
+
+echo $session->message();
+```
+
+| Field | Description | Required |
+|-------|-------------|----------|
+| `amount` | Amount to charge | Yes |
+| `currency` | Currency code, e.g. `USD`, `ZWG` | Yes |
+| `phone` | Customer phone number | Yes |
+| `reference` | Your order reference. Generated when left out | No |
+| `description` | Shown on the payment page | No |
+| `firstName`, `lastName` | Customer name. Defaults to the phone number | No |
+| `email` | Customer email | No |
+| `country` | Customer country code | No (`ZW`) |
+| `cod`, `coc` | Cash on delivery / cash on collection | No (`false`) |
+
+`create()` returns a `CheckoutSession`:
+
+- `url()` - the payment page URL, or `null` if ContiPay did not create the checkout
+- `successful()` - whether there is a URL to send the customer to
+- `reference()` - the reference to store against the order, for status lookups and matching webhooks
+- `message()` - the message from ContiPay, or the error when the request failed
+- `toArray()` / `toJson()` - the full response
+
+The customer pays on ContiPay's page, so confirm payment from your webhook (see [Webhooks](#webhooks)) or with `$checkout->getTransactionStatus($session->reference())`. Do not treat a visit to your success URL as proof of payment. Straight after `create()`, a status lookup can come back as "not found" because the customer has not paid yet.
+
+To show a pay button, create the session on your server and link to its URL. The button cannot call ContiPay directly from the browser, because that would expose your API secret.
 
 ## Disbursements
 
