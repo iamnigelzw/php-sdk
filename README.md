@@ -1,356 +1,136 @@
-# ContiPay SDK
+# ContiPay PHP SDK
 
-A simple and secure PHP SDK for integrating payments with the ContiPay platform. Process mobile money and card payments with ease.
+Accept mobile money and card payments, and send payouts, through [ContiPay](https://contipay.co.zw) from any PHP application.
 
 [![Latest Version](https://img.shields.io/packagist/v/contipay/php-sdk.svg)](https://packagist.org/packages/contipay/php-sdk)
 [![License](https://img.shields.io/packagist/l/contipay/php-sdk.svg)](LICENSE.md)
 [![Why PHP](https://img.shields.io/badge/Why_PHP-in_2026-7A86E8?style=flat&labelColor=18181b)](https://whyphp.dev)
 
+```php
+$response = $mobile->ecocash([
+    'amount'    => '10.00',
+    'currency'  => 'USD',
+    'phone'     => '0782000340',
+    'reference' => 'ORDER-1001',
+]);
+```
 
-## Requirements
+## Contents
 
-- PHP 8.1 or newer, with the `json` and `openssl` extensions
-- A ContiPay merchant account with an API key and secret
+- [Installation](#installation)
+- [Quick start](#quick-start)
+- [Key concepts](#key-concepts)
+- [Accept payments](#accept-payments)
+  - [Hosted checkout](#hosted-checkout) (recommended)
+  - [Mobile money](#mobile-money)
+  - [Cards](#cards)
+- [Send payouts](#send-payouts)
+- [Check a transaction's status](#check-a-transactions-status)
+- [Webhooks](#webhooks)
+- [Handling errors](#handling-errors)
+- [Going live checklist](#going-live-checklist)
+- [Reference](#reference)
+- [Security](#security)
+- [Contributing and tests](#contributing-and-tests)
 
-##  Installation
+## Installation
 
-Install the package via Composer:
+Requires PHP 8.1+ with the `json` and `openssl` extensions, and a ContiPay merchant account (API key, API secret and merchant ID).
 
 ```bash
 composer require contipay/php-sdk
 ```
 
-If you are on PHP 7.4 or 8.0, stay on 1.x: `composer require contipay/php-sdk:^1.2`.
+> On PHP 7.4 or 8.0, use the 1.x line: `composer require contipay/php-sdk:^1.2`.
 
-##  Quick Start
+## Quick start
 
-```php
-<?php
-
-use ContiPay\PhpSdk\Card;
-use ContiPay\PhpSdk\Mobile;
-
-require_once __DIR__ . '/vendor/autoload.php';
-
-// Initialize the SDK
-$contipay = new Mobile('your_api_key', 'your_api_secret');
-$contipay->setMerchantId(12345);
-
- // update Contipay URL (optional)
-$contipay->updateContipayURL('new-dev-url', 'new-live-url');
-
-// Process a payment
-$response = $contipay->mobile([
-    'amount' => '50.00',
-    'currency' => 'ZWG',
-    'phone' => '0782000340',
-    'reference' => uniqid('PAY-'),
-    'provider' => 'EcoCash',
-    'code' => 'EC'
-]);
-
-OR
-
-// Initialize the SDK
-$contipay = new Card('your_api_key', 'your_api_secret');
-$contipay->setMerchantId(12345);
-
-// Process a payment
-$response = $contipay->card([
-    'accountNumber' => '4111111111111111',
-    'accountExpiry' => '12/26',
-    'cvv' => '123',
-    'phone' => '0782000340',
-    'amount' => '50.00',
-    'currency' => 'USD',
-    'reference' => uniqid('CARD-'),
-    'provider' => 'Visa',
-    'code' => 'VA'
-]);
-```
-
-## Configuration
-
-### Basic Setup
-
-The SDK provides these main classes:
-- `Mobile` - For mobile money payments
-- `Card` - For card payments
-- `Checkout` - For sending customers to ContiPay's hosted payment page (see [Hosted Checkout](#hosted-checkout))
-- `Disbursement` - For sending money to mobile wallets (see [Disbursements](#disbursements))
-- `Webhook` - For reading payment notifications (see [Webhooks](#webhooks))
+Charge an EcoCash wallet in the test environment, then check whether it was paid.
 
 ```php
 <?php
 
-use ContiPay\PhpSdk\Mobile;
-use ContiPay\PhpSdk\Card;
-
-require_once __DIR__ . '/vendor/autoload.php';
-
-// Mobile payments
-$mobile = new Mobile($apiKey, $apiSecret, $mode, $method);
-
-// Card payments
-$card = new Card($apiKey, $apiSecret, $mode, $method);
-```
-
-### Configuration Parameters
-
-| Parameter | Description | Options | Default |
-|-----------|-------------|----------|---------|
-| `$apiKey` | Your ContiPay API key | - | Required |
-| `$apiSecret` | Your ContiPay API secret | - | Required |
-| `$mode` | Environment mode | `dev`, `live` | `dev` |
-| `$method` | Payment flow | `direct`, `redirect` | `direct` |
-
-### Error Handling
-
-Mistakes in your code throw exceptions before anything is sent to ContiPay:
-
-- `LogicException` if you make a payment or disbursement without calling `setMerchantId()` first
-- `InvalidArgumentException` if a required field is missing or `amount` is not a positive number with at most 2 decimal places (`"10"`, `"10.5"` and `"10.50"` are fine; `"-5"`, `"1e3"` and `"1.005"` are not)
-- `BadMethodCallException` if you call a provider the class does not support
-
-Everything else, including API rejections and network failures, comes back as JSON. When the SDK builds the error itself, it has a `status` of `"error"`, a `message`, and an `outcome`:
-
-- `"failed"`: ContiPay did not act on the request (for example, the connection was refused). It is safe to retry.
-- `"unknown"`: the request may have been processed (for example, it timed out after sending, or a gateway returned a 5xx). Look up the status by reference before you retry, or you can charge the customer or pay out twice.
-
-```php
-$result = json_decode($response, true);
-
-if (($result['outcome'] ?? null) === 'unknown') {
-    $status = $contipay->getTransactionStatus($reference); // or getDisbursementStatus()
-}
-```
-
-The SDK waits up to 10 seconds to connect and 60 seconds for a response.
-
-## Mobile Payments
-
-### Supported Providers
-
-- ✅ **EcoCash**
-- ✅ **OneMoney**
-- ✅ **Omari**
-- ✅ **InnBucks**
-
----
-
-* **EcoCash** (`$contipay->ecocash([...])`)
-* **OneMoney** (`$contipay->onemoney([...])`)
-* **Omari** (`$contipay->omari([...])`)
-* **InnBucks** (`$contipay->innbucks([...])`)
-* **All In One** (`$contipay->mobile([...])`)
-
----
-
-### Example: Process Mobile Payment
-
-```php
-<?php
+require __DIR__ . '/vendor/autoload.php';
 
 use ContiPay\PhpSdk\Mobile;
 
-require_once __DIR__ . '/vendor/autoload.php';
+$mobile = (new Mobile(getenv('CONTIPAY_API_KEY'), getenv('CONTIPAY_API_SECRET'), 'dev'))
+    ->setMerchantId((int) getenv('CONTIPAY_MERCHANT_ID'))
+    ->setWebhookUrl('https://your-site.com/contipay/webhook');
 
-$contipay = new Mobile('your_api_key', 'your_api_secret');
+$reference = 'ORDER-1001'; // your own unique reference, saved against the order
 
-// Configure merchant details
-$contipay->setMerchantId(12345);
-$contipay->setWebhookUrl('https://your-domain.com/webhook');
+$response = json_decode($mobile->ecocash([
+    'amount'    => '10.00',
+    'currency'  => 'USD',
+    'phone'     => '0782000340',
+    'reference' => $reference,
+]), true);
 
-try {
-    $response = $contipay->ecocash([
-        'amount' => '50.00',
-        'currency' => 'USD',
-        'phone' => '0782000340',
-        'reference' => uniqid('ECO-'),
-    ]);
-    
-    $result = json_decode($response, true);
-    // Handle success
-} catch (\Throwable $e) {
-    // Handle error
-}
+// The customer confirms on their phone. ContiPay then notifies your webhook,
+// or you can ask for the status yourself:
+$status = json_decode($mobile->getTransactionStatus($reference), true);
 ```
 
-OR
+That is the whole flow: **create** a payment with your reference, then **confirm** it by webhook or status lookup before you fulfil the order.
 
-#### Provider Code & Name Options
+## Key concepts
 
-| code | provider | 
-|-----------|-------------|
-| `EC` | `EcoCash` |
-| `OM` | `OneMoney` |
-| `OC` | `Omari` | 
-| `IB` | `InnBucks` | 
+### Environments
 
-```php
-<?php
+| Mode   | API                            | Use it for                     |
+|--------|--------------------------------|--------------------------------|
+| `dev`  | `https://api-uat.contipay.net` | Building and testing (default) |
+| `live` | `https://api.contipay.net`     | Real money                     |
 
-use ContiPay\PhpSdk\Mobile;
+Pass the mode as the third constructor argument. It is case-insensitive. To point at different hosts, call `updateContipayURL($devUrl, $liveUrl)`.
 
-require_once __DIR__ . '/vendor/autoload.php';
+### Direct vs redirect
 
-$contipay = new Mobile('your_api_key', 'your_api_secret');
+`Mobile` and `Card` take a fourth constructor argument, the payment flow:
 
-// Configure merchant details
-$contipay->setMerchantId(12345);
-$contipay->setWebhookUrl('https://your-domain.com/webhook');
+- **`direct`** (default): you collect the details and ContiPay charges the wallet or card straight away.
+- **`redirect`**: ContiPay returns a payment page URL (`redirectUrl`) to send the customer to. Set `setSuccessUrl()` and `setErrorUrl()` for where they come back to.
 
-// Required for redirect flow
-$contipay->setSuccessUrl('https://your-domain.com/success');
-$contipay->setErrorUrl('https://your-domain.com/error');
+`Checkout` always uses redirect, and `Disbursement` always uses direct.
 
-try {
-  $response = $contipay->mobile([
-        'amount' => '50.00',
-        'currency' => 'USD',
-        'phone' => '0782000340',
-        'reference' => uniqid('PAY-'),
-        'provider' => 'EcoCash',
-        'code' => 'EC'
-    ]);
+### References
 
-    $result = json_decode($response, true);
-    // Handle success
-} catch (\Throwable $e) {
-    // Handle error
-}
-```
+Every transaction has a **reference**: your own ID for it, sent to ContiPay as `merchantRef`. It is how you look up status and how you match webhooks to orders, so:
 
-## Card Payments
+- make it unique per transaction (e.g. your order ID plus an attempt number),
+- save it **before** you call ContiPay, so you can recover if the response never arrives.
 
-### Supported Cards
+Where a reference is optional and you leave it out, the SDK generates one like `V-4829104738291045`.
 
-- ✅ **Visa**
-- ✅ **MasterCard**
-- ✅ **ZimSwitch**
+### Amounts
 
----
+Pass amounts as strings or numbers in major units: `'10.50'` means ten dollars fifty. They must be positive with at most 2 decimal places. `'10'`, `'10.5'`, `10.5` and `10` are all fine. `'-5'`, `'0'`, `'1e3'` and `'1.005'` are rejected before anything is sent.
 
-* **Visa** (`$contipay->visa([...])`)
-* **MasterCard** (`$contipay->mastercard([...])`)
-* **ZimSwitch** (`$contipay->zimswitch([...])`)
-* **All In One** (`$contipay->card([...])`)
+### Responses
 
----
+Payment, payout and status methods return ContiPay's response as a **JSON string**. Decode it with `json_decode($response, true)`. If the request could not complete, you get an SDK-built JSON error instead (see [Handling errors](#handling-errors)). `Checkout` is the exception: it returns a `CheckoutSession` object.
 
-### Example: Process Card Payment
+## Accept payments
+
+### Hosted checkout
+
+**Recommended for most integrations.** The customer pays on ContiPay's page and picks their own method, so card numbers and wallet PINs never touch your server.
 
 ```php
-<?php
-
-use ContiPay\PhpSdk\Card;
-
-require_once __DIR__ . '/vendor/autoload.php';
-
-$contipay = new Card('your_api_key', 'your_api_secret', 'live', 'redirect');
-
-// Configure merchant details
-$contipay->setMerchantId(12345);
-$contipay->setWebhookUrl('https://your-domain.com/webhook');
-
-// Required for redirect flow
-$contipay->setSuccessUrl('https://your-domain.com/success');
-$contipay->setErrorUrl('https://your-domain.com/error');
-
-try {
-    $response = $contipay->visa([
-        'firstName' => 'John',
-        'lastName' => 'Doe',
-        'accountNumber' => '4111111111111111',
-        'accountExpiry' => '12/26',
-        'cvv' => '123',
-        'phone' => '0782000340',
-        'email' => 'john@example.com',
-        'amount' => '50.00',
-        'currency' => 'USD',
-        'country' => 'ZW',
-        'reference' => uniqid('CARD-'),
-        'description' => 'Premium Subscription'
-    ]);
-    
-    $result = json_decode($response, true);
-    // Handle success
-} catch (\Throwable $e) {
-    // Handle error
-}
-```
-
-OR
-
-#### Provider Code & Name Options
-
-| code | provider | 
-|-----------|-------------|
-| `ZS` | `ZimSwitch` |
-| `VA` | `Visa` |
-| `MA` | `MasterCard` | 
-
-
-```php
-<?php
-
-use ContiPay\PhpSdk\Card;
-
-require_once __DIR__ . '/vendor/autoload.php';
-
-$contipay = new Card('your_api_key', 'your_api_secret', 'dev', 'redirect');
-
-// Configure merchant details
-$contipay->setMerchantId(12345);
-$contipay->setWebhookUrl('https://your-domain.com/webhook');
-
-// Required for redirect flow
-$contipay->setSuccessUrl('https://your-domain.com/success');
-$contipay->setErrorUrl('https://your-domain.com/error');
-
-try {
-  $response = $contipay->card([
-        'accountNumber' => '4111111111111111',
-        'accountExpiry' => '12/26',
-        'cvv' => '123',
-        'phone' => '0782000340',
-        'amount' => '50.00',
-        'currency' => 'USD',
-        'reference' => uniqid('CARD-'),
-        'provider' => 'Visa',
-        'code' => 'VA'
-    ]);
-
-    $result = json_decode($response, true);
-    // Handle success
-} catch (\Throwable $e) {
-    // Handle error
-}
-```
-
-## Hosted Checkout
-
-Use `Checkout` to send the customer to ContiPay's payment page, where they choose how to pay. You never handle card or wallet details yourself.
-
-```php
-<?php
-
 use ContiPay\PhpSdk\Checkout;
 
-require_once __DIR__ . '/vendor/autoload.php';
-
-$checkout = new Checkout('your_api_key', 'your_api_secret', 'live');
-
-$checkout->setMerchantId(12345)
-    ->setWebhookUrl('https://your-domain.com/webhook')
-    ->setSuccessUrl('https://your-domain.com/success')
-    ->setCancelUrl('https://your-domain.com/cancel');
+$checkout = (new Checkout($apiKey, $apiSecret, 'live'))
+    ->setMerchantId($merchantId)
+    ->setWebhookUrl('https://your-site.com/contipay/webhook')
+    ->setSuccessUrl('https://your-site.com/orders/1001/thanks')
+    ->setCancelUrl('https://your-site.com/orders/1001');
 
 $session = $checkout->create([
-    'amount' => '50.00',
-    'currency' => 'USD',
-    'phone' => '0782000340',
-    'reference' => 'ORDER-1001',
+    'amount'      => '50.00',
+    'currency'    => 'USD',
+    'phone'       => '0782000340',
+    'reference'   => 'ORDER-1001',
     'description' => 'Order #1001',
 ]);
 
@@ -359,181 +139,319 @@ if ($session->successful()) {
     exit;
 }
 
-echo $session->message();
+error_log('ContiPay checkout failed: ' . $session->message());
 ```
 
-| Field | Description | Required |
-|-------|-------------|----------|
-| `amount` | Amount to charge | Yes |
-| `currency` | Currency code, e.g. `USD`, `ZWG` | Yes |
-| `phone` | Customer phone number | Yes |
-| `reference` | Your order reference. Generated when left out | No |
-| `description` | Shown on the payment page | No |
-| `firstName`, `lastName` | Customer name. Defaults to the phone number | No |
-| `email` | Customer email | No |
-| `country` | Customer country code | No (`ZW`) |
-| `cod`, `coc` | Cash on delivery / cash on collection | No (`false`) |
+| Field                   | Required | Notes                                              |
+|-------------------------|----------|----------------------------------------------------|
+| `amount`                | Yes      | See [Amounts](#amounts)                            |
+| `currency`              | Yes      | e.g. `USD`, `ZWG`                                  |
+| `phone`                 | Yes      | Customer phone number                              |
+| `reference`             | No       | Generated if left out                              |
+| `description`           | No       | Shown on the payment page                          |
+| `firstName`, `lastName` | No       | Defaults to the phone number                       |
+| `email`                 | No       |                                                    |
+| `country`               | No       | Defaults to `ZW`                                   |
+| `cod`, `coc`            | No       | Cash on delivery / collection. Defaults to `false` |
 
 `create()` returns a `CheckoutSession`:
 
-- `url()` - the payment page URL, or `null` if ContiPay did not create the checkout
-- `successful()` - whether there is a URL to send the customer to
-- `reference()` - the reference to store against the order, for status lookups and matching webhooks
-- `message()` - the message from ContiPay, or the error when the request failed
-- `toArray()` / `toJson()` - the full response
+| Method                  | Returns                                   |
+|-------------------------|-------------------------------------------|
+| `successful()`          | Whether ContiPay returned a payment page  |
+| `url()`                 | The payment page URL, or `null`           |
+| `reference()`           | The reference to save against the order   |
+| `message()`             | ContiPay's message, or the SDK error      |
+| `toArray()`, `toJson()` | The full response                         |
 
-The customer pays on ContiPay's page, so confirm payment from your webhook (see [Webhooks](#webhooks)) or with `$checkout->getTransactionStatus($session->reference())`. Do not treat a visit to your success URL as proof of payment. Straight after `create()`, a status lookup can come back as "not found" because the customer has not paid yet.
+> **The success URL is not proof of payment.** Anyone can visit it. Confirm by [webhook](#webhooks) or [status lookup](#check-a-transactions-status). A status lookup made straight after `create()` may return "not found" until the customer pays.
 
-To show a pay button, create the session on your server and link to its URL. The button cannot call ContiPay directly from the browser, because that would expose your API secret.
+Create the session on your server. A "Pay" button in the browser should link to your own endpoint, which calls `create()` and redirects. It must never call ContiPay directly, because that would expose your API secret.
 
-## Disbursements
-
-Use `Disbursement` to send money from your merchant account to a mobile wallet. Every disbursement is signed with your merchant private key, so pass it when you create the instance. You can pass the PEM string itself or a path to a `.pem` file. An invalid key throws an `InvalidArgumentException`.
-
-```php
-new Disbursement($apiKey, $apiSecret, $privateKey, $mode);
-```
-
-| Parameter | Description | Options | Default |
-|-----------|-------------|----------|---------|
-| `$apiKey` | Your ContiPay API key | - | Required |
-| `$apiSecret` | Your ContiPay API secret | - | Required |
-| `$privateKey` | PEM private key or path to a `.pem` file | - | Required |
-| `$mode` | Environment mode | `dev`, `live` | `dev` |
-
-### Supported Providers
-
-* **EcoCash** (`$disbursement->ecocash([...])`)
-* **OneMoney** (`$disbursement->onemoney([...])`)
-* **Omari** (`$disbursement->omari([...])`)
-* **InnBucks** (`$disbursement->innbucks([...])`)
-* **All In One** (`$disbursement->mobile([...])`, which needs `provider` and `code` from the [provider table](#provider-code--name-options))
-
-### Example: Send a Disbursement
-
-```php
-<?php
-
-use ContiPay\PhpSdk\Disbursement;
-
-require_once __DIR__ . '/vendor/autoload.php';
-
-$disbursement = new Disbursement(
-    'your_api_key',
-    'your_api_secret',
-    __DIR__ . '/keys/contipay-private.pem', // or the PEM string
-    'dev'
-);
-
-$disbursement->setMerchantId(12345)
-    ->setWebhookUrl('https://your-domain.com/webhook');
-
-$reference = uniqid('DISB-');
-
-$response = $disbursement->ecocash([
-    'amount' => '20.00',
-    'currency' => 'USD',
-    'phone' => '0782000340',
-    'reference' => $reference,
-    // optional
-    'accountName' => 'Nigel Jaure',
-    'firstName' => 'Nigel',
-    'lastName' => 'Jaure',
-    'email' => 'nigel@example.com',
-    'description' => 'Salary payout',
-]);
-
-$result = json_decode($response, true);
-
-// Check the disbursement later
-$status = $disbursement->getDisbursementStatus($reference);
-```
-
-`amount`, `currency`, `phone` and `reference` are required. A missing field throws an `InvalidArgumentException`. API errors are returned as JSON with a `status` and `message`. Never retry a disbursement whose `outcome` is `"unknown"` without checking `getDisbursementStatus()` first (see [Error Handling](#error-handling)).
-
-## Transaction Status
-
-`Mobile`, `Card` and `Disbursement` can look up the status of a payment or disbursement by its reference. The lookup uses the instance's mode (`dev`/`live`) and any URLs set with `updateContipayURL()`.
+### Mobile money
 
 ```php
 use ContiPay\PhpSdk\Mobile;
 
-$contipay = new Mobile('your-api-key', 'your-api-secret', 'dev');
-$contipay->setMerchantId(123); // required by ContiPay for status lookups
+$mobile = (new Mobile($apiKey, $apiSecret, 'live')) // 4th argument: 'direct' (default) or 'redirect'
+    ->setMerchantId($merchantId)
+    ->setWebhookUrl('https://your-site.com/contipay/webhook');
 
-// Status of a payment
-$response = $contipay->getTransactionStatus('TXN-12345');
-
-// Status of a disbursement
-$response = $contipay->getDisbursementStatus('DISB-12345');
-
-// Optionally narrow a disbursement lookup to a provider
-$response = $contipay->getDisbursementStatus('DISB-12345', 'EC');
-
-$result = json_decode($response, true);
+$response = $mobile->ecocash([
+    'amount'      => '50.00',
+    'currency'    => 'USD',
+    'phone'       => '0782000340',
+    'reference'   => 'ORDER-1001',
+    'description' => 'Order #1001', // optional
+]);
 ```
 
-An empty reference throws an `InvalidArgumentException`. API errors are returned as JSON with a `status` and `message`.
+| Method         | Provider                        | Code |
+|----------------|---------------------------------|------|
+| `ecocash([])`  | EcoCash                         | `EC` |
+| `onemoney([])` | OneMoney                        | `OM` |
+| `omari([])`    | Omari                           | `OC` |
+| `innbucks([])` | InnBucks                        | `IB` |
+| `mobile([])`   | Any. Pass `provider` and `code` | —    |
 
-Payment status calls `GET /acquire/payment?merchantRef=...&merchantId=...` and disbursement status calls `GET /disburse/payment?merchantRef=...&merchantId=...`, adding `&providerCode=...` when you pass one. Both use the same API key and secret as payments, and send the merchant ID set with `setMerchantId()`.
+Required for every provider: `amount`, `currency`, `phone`, `reference`. `mobile()` also needs `provider` (e.g. `'EcoCash'`) and `code` (e.g. `'EC'`), which lets you route to a provider chosen at runtime:
 
-## Webhooks
+```php
+$response = $mobile->mobile([
+    'amount'    => '50.00',
+    'currency'  => 'USD',
+    'phone'     => '0782000340',
+    'reference' => 'ORDER-1001',
+    'provider'  => 'OneMoney',
+    'code'      => 'OM',
+]);
+```
 
-ContiPay POSTs a JSON notification to the URL you set with `setWebhookUrl()` when a transaction changes status. `Webhook` reads it:
+For the redirect flow, construct with `'redirect'` and set `setSuccessUrl()` and `setErrorUrl()`.
+
+### Cards
+
+> **PCI DSS:** with the direct flow, card numbers and CVVs pass through your server, which puts you in full PCI DSS scope. Unless you are PCI compliant, use [Hosted checkout](#hosted-checkout) or `Card` with the `redirect` flow.
+
+```php
+use ContiPay\PhpSdk\Card;
+
+$card = (new Card($apiKey, $apiSecret, 'live', 'redirect'))
+    ->setMerchantId($merchantId)
+    ->setWebhookUrl('https://your-site.com/contipay/webhook')
+    ->setSuccessUrl('https://your-site.com/orders/1001/thanks')
+    ->setErrorUrl('https://your-site.com/orders/1001');
+
+$response = $card->visa([
+    'accountNumber' => '4111111111111111',
+    'accountExpiry' => '12/26',
+    'cvv'           => '123',
+    'phone'         => '0782000340',
+    'amount'        => '50.00',
+    'currency'      => 'USD',
+    'reference'     => 'ORDER-1001',
+    // optional
+    'firstName'     => 'Tariro',
+    'lastName'      => 'Moyo',
+    'email'         => 'tariro@example.com',
+    'country'       => 'ZW',
+    'description'   => 'Order #1001',
+]);
+```
+
+| Method           | Card       | Code | Required fields                                                                     |
+|------------------|------------|------|-------------------------------------------------------------------------------------|
+| `visa([])`       | Visa       | `VA` | `amount`, `currency`, `phone`, `accountNumber`, `accountExpiry`, `cvv`, `reference` |
+| `mastercard([])` | MasterCard | `MA` | `amount`, `currency`, `phone`, `accountNumber`, `accountExpiry`, `cvv`              |
+| `zimswitch([])`  | ZimSwitch  | `ZS` | `amount`, `currency`, `phone`, `reference`                                          |
+| `card([])`       | Any        | —    | As `mastercard`, plus `provider` and `code`                                         |
+
+Where `reference` is not required, one is generated if you leave it out. Passing your own is still strongly recommended.
+
+## Send payouts
+
+`Disbursement` sends money from your merchant account to a mobile wallet. Each payout is signed with your merchant RSA private key, which ContiPay verifies.
+
+```php
+use ContiPay\PhpSdk\Disbursement;
+
+$payouts = (new Disbursement(
+    $apiKey,
+    $apiSecret,
+    '/secure/path/contipay-private.pem', // a path, or the PEM string itself
+    'live'
+))
+    ->setMerchantId($merchantId)
+    ->setWebhookUrl('https://your-site.com/contipay/webhook');
+
+$reference = 'PAYOUT-2026-0042'; // save this before sending
+
+$response = $payouts->ecocash([
+    'amount'      => '20.00',
+    'currency'    => 'USD',
+    'phone'       => '0782000340',
+    'reference'   => $reference,
+    // optional
+    'accountName' => 'Tariro Moyo',
+    'firstName'   => 'Tariro',
+    'lastName'    => 'Moyo',
+    'email'       => 'tariro@example.com',
+    'description' => 'Commission payout',
+]);
+```
+
+Supports `ecocash()`, `onemoney()`, `omari()`, `innbucks()` and `mobile()`, with the same provider codes as [Mobile money](#mobile-money). `amount`, `currency`, `phone` and `reference` are always required.
+
+An invalid key throws an `InvalidArgumentException` when you construct the object, so a bad deployment fails at startup instead of at payout time.
+
+> **Never blindly retry a payout.** If the response has `"outcome": "unknown"`, the money may already have been sent. Check `getDisbursementStatus($reference)` first. See [Handling errors](#handling-errors).
+
+## Check a transaction's status
+
+Every class (`Mobile`, `Card`, `Checkout`, `Disbursement`) can look up a transaction by your reference. Call `setMerchantId()` first, because ContiPay requires it for lookups.
+
+```php
+$response = $mobile->getTransactionStatus('ORDER-1001');                // payments
+$response = $payouts->getDisbursementStatus('PAYOUT-2026-0042');       // payouts
+$response = $payouts->getDisbursementStatus('PAYOUT-2026-0042', 'EC'); // narrowed to a provider
+```
+
+Read the result with the same `Webhook` class you use for notifications:
 
 ```php
 use ContiPay\PhpSdk\Webhook;
 
-$webhook = Webhook::fromRequest(); // or Webhook::fromJson($rawBody) / new Webhook($array)
+$status = new Webhook(json_decode($response, true));
 
-$order = findOrder($webhook->reference()); // your merchantRef
+if ($status->isPaid()) {
+    // fulfil the order
+}
+```
+
+The lookups call `GET /acquire/payment` and `GET /disburse/payment` with `merchantRef` and `merchantId` (plus `providerCode` when given).
+
+## Webhooks
+
+ContiPay POSTs a JSON notification to your webhook URL whenever a transaction changes status.
+
+```php
+use ContiPay\PhpSdk\Webhook;
+
+$webhook = Webhook::fromRequest(); // or Webhook::fromJson($rawBody)
+
+$order = findOrderByReference($webhook->reference());
+
+if ($order === null || $order->isSettled()) {
+    http_response_code(200); // unknown or already handled: acknowledge and stop
+    exit;
+}
 
 if ($webhook->isPaid()) {
-    // paid or confirmed: fulfil the order
-} elseif ($webhook->isPending()) {
-    // pending, queued, approved or submitted: wait for the next notification
-} elseif ($webhook->isRefunded()) {
-    // refunded
-} else {
-    // error, declined or an unknown status: release the order
+    // Notifications are not signed, so confirm with ContiPay before fulfilling.
+    $confirmed = new Webhook(json_decode($mobile->getTransactionStatus($order->reference), true));
+
+    if ($confirmed->isPaid() && round($confirmed->amount(), 2) === round($order->amount, 2)) {
+        $order->markPaid();
+    }
+} elseif ($webhook->isFailed()) {
+    $order->markFailed();
 }
+// isPending(): another notification will follow
 
 http_response_code(200);
 ```
 
-`statusCode()` returns one of the `Webhook::STATUS_*` constants. It uses the numeric `statusCode` field when present and otherwise maps the textual `status`. An unrecognised status counts as failed, never as paid.
+| Check          | True when the status is                   |
+|----------------|-------------------------------------------|
+| `isPaid()`     | Paid or confirmed                         |
+| `isPending()`  | Pending, queued, approved or submitted    |
+| `isRefunded()` | Refunded                                  |
+| `isFailed()`   | Error, declined, or anything unrecognised |
 
-Other fields: `contiPayReference()`, `providerReference()` (e.g. the EcoCash transaction ID), `merchantId()`, `amount()`, `currency()`, `providerCode()`, `providerName()`, `methodCode()`, `message()`, `get($key)` and `toArray()`.
+An unrecognised status always counts as failed, never as paid. `statusCode()` gives the raw `Webhook::STATUS_*` value.
 
-ContiPay can send the same notification more than once, so skip orders you have already settled. Notifications are not signed. Before you release goods, check that `merchantId()` and `amount()` match your order, or confirm the payment with the API. `Webhook` also reads status responses:
+Fields: `reference()`, `contiPayReference()`, `providerReference()` (e.g. the EcoCash transaction ID), `merchantId()`, `amount()`, `currency()`, `providerCode()`, `providerName()`, `methodCode()`, `message()`, plus `get($key)` and `toArray()` for anything else.
+
+**Webhook rules of thumb**
+
+- **Confirm before fulfilling.** Notifications are not signed, so anyone who finds your URL can post one.
+- **Be idempotent.** ContiPay may send the same notification more than once.
+- **Respond quickly with `200`.** Do slow work (emails, fulfilment) in a queue.
+
+## Handling errors
+
+Errors come in two kinds.
+
+**1. Exceptions: a mistake in your code.** These are thrown before anything is sent to ContiPay, so fix the code rather than catching them.
+
+| Exception                  | When                                                                                        |
+|----------------------------|---------------------------------------------------------------------------------------------|
+| `InvalidArgumentException` | A required field is missing, the [amount](#amounts) is invalid, or the payout private key can't be read |
+| `LogicException`           | A request was made before `setMerchantId()`                                                 |
+| `BadMethodCallException`   | The class has no such provider, e.g. `$mobile->paypal()`                                    |
+
+**2. JSON errors: the request did not succeed.** API rejections come back as ContiPay's own JSON. Network and server failures come back as SDK-built JSON:
+
+```json
+{ "status": "error", "message": "cURL error 28: Operation timed out", "outcome": "unknown" }
+```
+
+`outcome` tells you whether it is safe to try again:
+
+| `outcome`   | Meaning                                                                                       | What to do                       |
+|-------------|-----------------------------------------------------------------------------------------------|----------------------------------|
+| `"failed"`  | ContiPay never received the request (e.g. connection refused, DNS failure) or rejected it    | Safe to retry                    |
+| `"unknown"` | It may have been processed (e.g. timed out after sending, 5xx from a gateway)                 | **Check status first**           |
 
 ```php
-$status = new Webhook(json_decode($contipay->getTransactionStatus($webhook->reference()), true));
+$result = json_decode($response, true);
 
-if ($status->isPaid()) {
-    // confirmed by ContiPay
+if (($result['outcome'] ?? null) === 'unknown') {
+    $status = new Webhook(json_decode($mobile->getTransactionStatus($reference), true));
+    // isPaid(): treat as success. isPending(): wait for the webhook.
+    // Still not found after a short wait: retry.
 }
 ```
 
-## Testing
+The SDK waits 10 seconds to connect and 60 seconds for a response.
+
+## Going live checklist
+
+- [ ] Live API key, secret and merchant ID, loaded from environment variables or a secrets manager rather than committed to code
+- [ ] Mode set to `'live'`
+- [ ] Webhook URL is public, served over HTTPS, and returns `200` quickly
+- [ ] Every transaction has a unique reference, saved **before** calling ContiPay
+- [ ] Orders are fulfilled only after a webhook **confirmed with a status lookup**, never on the success URL alone
+- [ ] Responses with `"outcome": "unknown"` trigger a status check, not a blind retry
+- [ ] Webhook handler is idempotent (ignores already-settled orders)
+- [ ] Payout private key is stored outside the web root, with restricted file permissions
+- [ ] Cards go through hosted checkout or the redirect flow, unless you are PCI DSS compliant
+
+## Reference
+
+### Constructors
+
+| Class          | Signature                                                            |
+|----------------|----------------------------------------------------------------------|
+| `Mobile`       | `new Mobile($apiKey, $apiSecret, $mode = 'dev', $method = 'direct')` |
+| `Card`         | `new Card($apiKey, $apiSecret, $mode = 'dev', $method = 'direct')`   |
+| `Checkout`     | `new Checkout($apiKey, $apiSecret, $mode = 'dev')`                   |
+| `Disbursement` | `new Disbursement($apiKey, $apiSecret, $privateKey, $mode = 'dev')`  |
+| `Webhook`      | `Webhook::fromRequest()`, `Webhook::fromJson($json)`, `new Webhook($array)` |
+
+### Setters (chainable)
+
+| Method                           | Available on                 | Purpose                                  |
+|----------------------------------|------------------------------|------------------------------------------|
+| `setMerchantId(int)`             | all                          | Your ContiPay merchant ID (**required**) |
+| `setWebhookUrl(string)`          | all                          | Where ContiPay sends notifications       |
+| `setSuccessUrl(string)`          | `Mobile`, `Card`, `Checkout` | Return URL after paying (redirect flows) |
+| `setErrorUrl(string)`            | `Mobile`, `Card`             | Return URL after a failure or cancel     |
+| `setCancelUrl(string)`           | `Checkout`                   | Return URL after cancelling              |
+| `updateContipayURL($dev, $live)` | all                          | Override the API hosts                   |
+
+Each setter has a matching getter, e.g. `getMerchantId()`.
+
+## Security
+
+- Keep your API secret and private key on the server. Never ship them to a browser or mobile app.
+- All traffic uses HTTPS with certificate verification on. Don't point `updateContipayURL()` at a plain `http://` host.
+- The SDK does not log requests or responses. If you log them yourself, strip card numbers, CVVs and credentials first.
+- Report security issues privately to [info@contipay.co.zw](mailto:info@contipay.co.zw), not in a public issue.
+
+## Contributing and tests
 
 ```bash
 composer install
 composer test
 ```
 
-The tests use a mocked HTTP client and never contact ContiPay.
+The test suite uses a mocked HTTP client and never contacts ContiPay.
 
-## Security
+## Support
 
-- All API requests are encrypted using TLS
-- Sensitive data is never logged
-- API credentials are required for all requests
+ContiPay: [contipay.co.zw](https://contipay.co.zw) · [info@contipay.co.zw](mailto:info@contipay.co.zw)
 
-## Additional Resources
+## License
 
-- [Support Portal](https://contipay.co.zw)
-
-## 📄 License
-
-This SDK is open-sourced software licensed under the [MIT license](LICENSE.md).
+MIT. See [LICENSE.md](LICENSE.md).
