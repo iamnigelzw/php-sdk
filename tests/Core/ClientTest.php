@@ -7,6 +7,9 @@ namespace ContiPay\PhpSdk\Tests\Core;
 use ContiPay\PhpSdk\Core\Client;
 use ContiPay\PhpSdk\Tests\Support\FakeClient;
 use ContiPay\PhpSdk\Tests\Support\TestCase;
+use GuzzleHttp\Exception\ConnectException;
+use GuzzleHttp\Exception\RequestException;
+use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Response;
 
 class ClientTest extends TestCase
@@ -54,6 +57,50 @@ class ClientTest extends TestCase
 
         $this->assertSame('error', $result['status']);
         $this->assertStringContainsString('502', $result['message']);
+        $this->assertSame(Client::OUTCOME_UNKNOWN, $result['outcome']);
+    }
+
+    public function test_non_json_client_error_is_a_definite_failure(): void
+    {
+        $client = new FakeClient(responses: [new Response(404, [], '<html>Not Found</html>')]);
+
+        $result = $this->decode($client->process(['amount' => 1]));
+
+        $this->assertSame(Client::OUTCOME_FAILED, $result['outcome']);
+    }
+
+    public function test_connection_refused_is_a_definite_failure(): void
+    {
+        $client = new FakeClient(responses: [
+            new ConnectException('Connection refused', new Request('POST', '/'), null, ['errno' => 7]),
+        ]);
+
+        $result = $this->decode($client->process(['amount' => 1]));
+
+        $this->assertSame(['status' => 'error', 'message' => 'Connection refused', 'outcome' => Client::OUTCOME_FAILED], $result);
+    }
+
+    public function test_timeout_after_sending_is_unknown(): void
+    {
+        // Guzzle raises ConnectException for operation timeouts (cURL error 28) too.
+        $client = new FakeClient(responses: [
+            new ConnectException('Operation timed out', new Request('POST', '/'), null, ['errno' => 28]),
+        ]);
+
+        $result = $this->decode($client->process(['amount' => 1]));
+
+        $this->assertSame(Client::OUTCOME_UNKNOWN, $result['outcome']);
+    }
+
+    public function test_request_error_without_response_is_unknown(): void
+    {
+        $client = new FakeClient(responses: [
+            new RequestException('Connection reset', new Request('POST', '/')),
+        ]);
+
+        $result = $this->decode($client->process(['amount' => 1]));
+
+        $this->assertSame(Client::OUTCOME_UNKNOWN, $result['outcome']);
     }
 
     public function test_checksum_signs_fields_in_order(): void

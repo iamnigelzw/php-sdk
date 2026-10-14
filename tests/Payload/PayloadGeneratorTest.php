@@ -54,7 +54,7 @@ class PayloadGeneratorTest extends TestCase
             ->setUpTransaction(1)
             ->redirectPayload();
 
-        $this->assertMatchesRegularExpression('/^V-\d{8}$/', $payload['reference']);
+        $this->assertMatchesRegularExpression('/^V-\d{16}$/', $payload['reference']);
         $this->assertSame('Payment with ref:' . $payload['reference'], $payload['description']);
     }
 

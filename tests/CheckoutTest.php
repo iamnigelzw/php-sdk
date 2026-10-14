@@ -114,7 +114,7 @@ class CheckoutTest extends TestCase
 
         $session = $checkout->create($this->fields(['reference' => '']));
 
-        $this->assertMatchesRegularExpression('/^V-\d{8}$/', $session->reference());
+        $this->assertMatchesRegularExpression('/^V-\d{16}$/', $session->reference());
         $this->assertSame($session->reference(), $this->requestBody($client)['reference']);
     }
 
@@ -144,12 +144,12 @@ class CheckoutTest extends TestCase
     public function test_connection_failure_has_no_url(): void
     {
         $checkout = $this->checkout();
-        $this->fake($checkout, [new ConnectException('Connection refused', new Request('PUT', '/'))]);
+        $this->fake($checkout, [new ConnectException('Connection refused', new Request('PUT', '/'), null, ['errno' => 7])]);
 
         $session = $checkout->create($this->fields());
 
         $this->assertFalse($session->successful());
-        $this->assertSame(['status' => 'error', 'message' => 'Connection refused'], $session->toArray());
+        $this->assertSame(['status' => 'error', 'message' => 'Connection refused', 'outcome' => 'failed'], $session->toArray());
     }
 
     public function test_missing_merchant_id_throws(): void

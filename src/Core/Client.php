@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ContiPay\PhpSdk\Core;
 
 use GuzzleHttp\Client as HttpClient;
+use GuzzleHttp\Exception\ConnectException;
 use GuzzleHttp\Exception\GuzzleException;
 use GuzzleHttp\Exception\RequestException;
 use InvalidArgumentException;
@@ -15,7 +16,12 @@ use SanixAI\Utils\Core\Checksums\ContipayChecksum;
  * Low-level HTTP client for the ContiPay API.
  *
  * Every request method returns the API's JSON response body. Transport and HTTP
- * errors are returned as JSON too, so callers always get a decodable string.
+ * errors are returned as JSON too, so callers always get a decodable string:
+ * {"status": "error", "message": "...", "outcome": "failed"|"unknown"}.
+ *
+ * "failed" means ContiPay did not act on the request, so it is safe to retry.
+ * "unknown" means it may have been processed: look up the status by reference
+ * before retrying, or a retry can charge or pay out twice.
  */
 class Client
 {
@@ -33,6 +39,21 @@ class Client
      * Nothing has been sent when this fires, so it is always safe to retry.
      */
     protected const CONNECT_TIMEOUT = 10;
+
+    /**
+     * Seconds to wait for ContiPay to respond before giving up.
+     * The request may already have been processed when this fires.
+     */
+    protected const TIMEOUT = 60;
+
+    public const OUTCOME_FAILED = 'failed';
+    public const OUTCOME_UNKNOWN = 'unknown';
+
+    /**
+     * cURL errors raised before the request is sent: couldn't resolve proxy,
+     * couldn't resolve host, couldn't connect, TLS handshake failed.
+     */
+    protected const NOT_SENT_CURL_ERRORS = [5, 6, 7, 35];
 
     /**
      * @var string API token for authentication
@@ -243,15 +264,27 @@ class Client
 
         try {
             return (string) $this->http()->request($method, '/' . ltrim($endpoint, '/'), $options)->getBody();
+        } catch (ConnectException $e) {
+            // Guzzle also raises this for timeouts after the request was sent, so only
+            // errors that happen before sending count as a definite failure.
+            $errno = $e->getHandlerContext()['errno'] ?? null;
+            $notSent = in_array($errno, static::NOT_SENT_CURL_ERRORS, true);
+
+            return $this->errorResponse($e->getMessage(), $notSent ? self::OUTCOME_FAILED : self::OUTCOME_UNKNOWN);
         } catch (RequestException $e) {
             // ContiPay explains rejected requests in a JSON body; pass it through when present.
-            $body = $e->hasResponse() ? (string) $e->getResponse()->getBody() : '';
+            $response = $e->getResponse();
+            $body = $response !== null ? (string) $response->getBody() : '';
             if ($body !== '' && json_decode($body) !== null) {
                 return $body;
             }
-            return $this->errorResponse($e->getMessage());
+
+            // A 4xx was rejected; a 5xx (e.g. a gateway timeout) or no response may have been processed.
+            $rejected = $response !== null && $response->getStatusCode() < 500;
+
+            return $this->errorResponse($e->getMessage(), $rejected ? self::OUTCOME_FAILED : self::OUTCOME_UNKNOWN);
         } catch (GuzzleException $e) {
-            return $this->errorResponse($e->getMessage());
+            return $this->errorResponse($e->getMessage(), self::OUTCOME_UNKNOWN);
         }
     }
 
@@ -266,6 +299,7 @@ class Client
             $this->client = new HttpClient([
                 'base_uri' => $this->getBaseURL(),
                 'connect_timeout' => static::CONNECT_TIMEOUT,
+                'timeout' => static::TIMEOUT,
             ]);
         }
 
@@ -276,13 +310,15 @@ class Client
      * Build a JSON error response.
      *
      * @param string $message Error message
+     * @param string $outcome One of the OUTCOME_* constants
      * @return string
      */
-    protected function errorResponse(string $message): string
+    protected function errorResponse(string $message, string $outcome): string
     {
         return json_encode([
             'status' => 'error',
             'message' => $message,
+            'outcome' => $outcome,
         ], JSON_INVALID_UTF8_SUBSTITUTE);
     }
 }

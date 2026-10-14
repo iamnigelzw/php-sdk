@@ -371,7 +371,7 @@ class PayloadGenerator
     protected function resolveReference(?string $reference): string
     {
         return ($reference === null || $reference === '')
-            ? 'V-' . (new Reference())->generate(8)
+            ? 'V-' . (new Reference())->generate(16)
             : $reference;
     }
 

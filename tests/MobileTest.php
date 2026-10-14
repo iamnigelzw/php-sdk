@@ -141,10 +141,64 @@ class MobileTest extends TestCase
     public function test_connection_failure_returns_json_error(): void
     {
         $mobile = $this->mobile();
-        $this->fake($mobile, [new ConnectException('Connection refused', new Request('POST', '/'))]);
+        $this->fake($mobile, [new ConnectException('Connection refused', new Request('POST', '/'), null, ['errno' => 7])]);
 
         $result = $this->decode($mobile->ecocash($this->fields()));
 
-        $this->assertSame(['status' => 'error', 'message' => 'Connection refused'], $result);
+        $this->assertSame(['status' => 'error', 'message' => 'Connection refused', 'outcome' => 'failed'], $result);
+    }
+
+    /**
+     * @dataProvider invalidAmounts
+     */
+    public function test_invalid_amount_throws_before_sending($amount): void
+    {
+        $mobile = $this->mobile();
+        $client = $this->fake($mobile);
+
+        try {
+            $mobile->ecocash($this->fields(['amount' => $amount]));
+            $this->fail('Expected an invalid amount to throw.');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('Invalid amount', $e->getMessage());
+        }
+
+        $this->assertSame([], $client->history);
+    }
+
+    public static function invalidAmounts(): array
+    {
+        return [
+            'negative' => ['-5'],
+            'negative float' => [-5.0],
+            'exponent' => ['1e3'],
+            'padded' => [' 5'],
+            'three decimals' => ['1.005'],
+            'zero with decimals' => ['0.00'],
+            'array' => [[10]],
+        ];
+    }
+
+    public function test_integer_and_float_amounts_are_accepted(): void
+    {
+        $mobile = $this->mobile();
+        $client = $this->fake($mobile, [$this->ok(), $this->ok()]);
+
+        $mobile->ecocash($this->fields(['amount' => 10]));
+        $this->assertEquals(10.0, $this->requestBody($client)['transaction']['amount']);
+
+        $mobile->ecocash($this->fields(['amount' => 10.5]));
+        $this->assertEquals(10.5, $this->requestBody($client)['transaction']['amount']);
+    }
+
+    public function test_negative_amount_via_process_payment_returns_json_error(): void
+    {
+        $mobile = $this->mobile();
+        $client = $this->fake($mobile);
+
+        $result = $this->decode($mobile->processPayment('-5', 'USD', '0782000340', 'PAY-1'));
+
+        $this->assertSame('error', $result['status']);
+        $this->assertSame([], $client->history);
     }
 }

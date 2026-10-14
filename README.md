@@ -109,10 +109,23 @@ $card = new Card($apiKey, $apiSecret, $mode, $method);
 Mistakes in your code throw exceptions before anything is sent to ContiPay:
 
 - `LogicException` if you make a payment or disbursement without calling `setMerchantId()` first
-- `InvalidArgumentException` if a required field is missing or `amount` is not a number
+- `InvalidArgumentException` if a required field is missing or `amount` is not a positive number with at most 2 decimal places (`"10"`, `"10.5"` and `"10.50"` are fine; `"-5"`, `"1e3"` and `"1.005"` are not)
 - `BadMethodCallException` if you call a provider the class does not support
 
-Everything else, including API rejections and network failures, comes back as JSON. When the SDK builds the error itself, it has a `status` of `"error"` and a `message`.
+Everything else, including API rejections and network failures, comes back as JSON. When the SDK builds the error itself, it has a `status` of `"error"`, a `message`, and an `outcome`:
+
+- `"failed"`: ContiPay did not act on the request (for example, the connection was refused). It is safe to retry.
+- `"unknown"`: the request may have been processed (for example, it timed out after sending, or a gateway returned a 5xx). Look up the status by reference before you retry, or you can charge the customer or pay out twice.
+
+```php
+$result = json_decode($response, true);
+
+if (($result['outcome'] ?? null) === 'unknown') {
+    $status = $contipay->getTransactionStatus($reference); // or getDisbursementStatus()
+}
+```
+
+The SDK waits up to 10 seconds to connect and 60 seconds for a response.
 
 ## Mobile Payments
 
@@ -436,7 +449,7 @@ $result = json_decode($response, true);
 $status = $disbursement->getDisbursementStatus($reference);
 ```
 
-`amount`, `currency`, `phone` and `reference` are required. A missing field throws an `InvalidArgumentException`. API errors are returned as JSON with a `status` and `message`.
+`amount`, `currency`, `phone` and `reference` are required. A missing field throws an `InvalidArgumentException`. API errors are returned as JSON with a `status` and `message`. Never retry a disbursement whose `outcome` is `"unknown"` without checking `getDisbursementStatus()` first (see [Error Handling](#error-handling)).
 
 ## Transaction Status
 

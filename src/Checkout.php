@@ -5,6 +5,7 @@ namespace ContiPay\PhpSdk;
 use ContiPay\PhpSdk\Core\Client as Core;
 use ContiPay\PhpSdk\Payload\PayloadGenerator;
 use ContiPay\PhpSdk\Concerns\HasStatus;
+use ContiPay\PhpSdk\Support\Amount;
 
 /**
  * Hosted checkout: send the customer to ContiPay's payment page,
@@ -169,7 +170,7 @@ class Checkout
      *
      * @param array $fields
      * @throws \LogicException If no merchant ID has been set
-     * @throws \InvalidArgumentException If a required field is missing or amount is not a number
+     * @throws \InvalidArgumentException If a required field is missing or the amount is invalid
      * @return CheckoutSession
      */
     public function create(array $fields): CheckoutSession
@@ -182,9 +183,7 @@ class Checkout
             }
         }
 
-        if (!is_numeric($fields['amount'])) {
-            throw new \InvalidArgumentException("Invalid amount: '{$fields['amount']}' is not a number");
-        }
+        $amount = Amount::parse($fields['amount']);
 
         $phone = (string) $fields['phone'];
 
@@ -202,7 +201,7 @@ class Checkout
                 $fields['email'] ?? ''
             )
             ->setUpTransaction(
-                (float) $fields['amount'],
+                $amount,
                 $fields['currency'],
                 $fields['reference'] ?? '',
                 $fields['description'] ?? ''

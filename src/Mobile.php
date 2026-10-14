@@ -5,6 +5,7 @@ namespace ContiPay\PhpSdk;
 use ContiPay\PhpSdk\Core\Client as Core;
 use ContiPay\PhpSdk\Payload\PayloadGenerator;
 use ContiPay\PhpSdk\Concerns\HasStatus;
+use ContiPay\PhpSdk\Support\Amount;
 
 class Mobile
 {
@@ -120,9 +121,7 @@ class Mobile
             }
         }
 
-        if (!is_numeric($fields['amount'])) {
-            throw new \InvalidArgumentException("Invalid amount: '{$fields['amount']}' is not a number");
-        }
+        Amount::parse($fields['amount']);
 
         return $this->processPayment(
             $fields['amount'] ?? '0',
@@ -266,6 +265,8 @@ class Mobile
         $merchantId = $this->getMerchantId();
 
         try {
+            $amount = Amount::parse($amount);
+
             $payload = $this->method == 'direct' ? (new PayloadGenerator(
                 $merchantId,
                 $this->getWebhookUrl(),
