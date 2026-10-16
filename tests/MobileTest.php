@@ -63,6 +63,51 @@ class MobileTest extends TestCase
         $this->assertSame('InnBucks', $transaction['providerName']);
     }
 
+    /**
+     * @dataProvider providerMethods
+     */
+    public function test_each_provider_maps_to_its_name_and_code(string $method, string $name, string $code): void
+    {
+        $mobile = $this->mobile();
+        $client = $this->fake($mobile, [$this->ok()]);
+
+        $mobile->{$method}($this->fields());
+
+        $transaction = $this->requestBody($client)['transaction'];
+        $this->assertSame($code, $transaction['providerCode']);
+        $this->assertSame($name, $transaction['providerName']);
+    }
+
+    public static function providerMethods(): array
+    {
+        return [
+            ['ecocash', 'EcoCash', 'EC'],
+            ['onemoney', 'OneMoney', 'OM'],
+            ['omari', 'Omari', 'OC'],
+            ['innbucks', 'InnBucks', 'IB'],
+            ['telecash', 'TeleCash', 'TC'],
+            ['mtn', 'MTN', 'MN'],
+            ['airtel', 'AirTel', 'AT'],
+            ['zamtel', 'ZamTel', 'ZT'],
+            ['equitel', 'EquiTel', 'ET'],
+            ['mpesa', 'MPesa', 'MP'],
+            ['orange', 'Orange', 'OG'],
+            ['tigo', 'Tigo', 'TG'],
+        ];
+    }
+
+    public function test_country_code_defaults_to_zw_and_can_be_overridden(): void
+    {
+        $mobile = $this->mobile();
+        $client = $this->fake($mobile, [$this->ok(), $this->ok()]);
+
+        $mobile->ecocash($this->fields());
+        $this->assertSame('ZW', $this->requestBody($client)['customer']['countryCode']);
+
+        $mobile->mpesa($this->fields(['countryCode' => 'KE']));
+        $this->assertSame('KE', $this->requestBody($client)['customer']['countryCode']);
+    }
+
     public function test_redirect_payment_sends_put_with_redirect_urls(): void
     {
         $mobile = $this->mobile('redirect')

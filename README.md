@@ -23,6 +23,7 @@ $response = $mobile->ecocash([
 - [Accept payments](#accept-payments)
   - [Hosted checkout](#hosted-checkout) (recommended)
   - [Mobile money](#mobile-money)
+  - [Vouchers](#vouchers)
   - [Cards](#cards)
 - [Send payouts](#send-payouts)
 - [Check a transaction's status](#check-a-transactions-status)
@@ -186,15 +187,25 @@ $response = $mobile->ecocash([
 ]);
 ```
 
-| Method         | Provider                        | Code |
-|----------------|---------------------------------|------|
-| `ecocash([])`  | EcoCash                         | `EC` |
-| `onemoney([])` | OneMoney                        | `OM` |
-| `omari([])`    | Omari                           | `OC` |
-| `innbucks([])` | InnBucks                        | `IB` |
-| `mobile([])`   | Any. Pass `provider` and `code` | —    |
+| Method         | Provider                        | Code | Payouts |
+|----------------|---------------------------------|------|---------|
+| `ecocash([])`  | EcoCash                         | `EC` | ✅      |
+| `onemoney([])` | OneMoney                        | `OM` | ✅      |
+| `omari([])`    | Omari                           | `OC` | ✅      |
+| `innbucks([])` | InnBucks                        | `IB` | ✅      |
+| `telecash([])` | TeleCash                        | `TC` | —       |
+| `mtn([])`      | MTN                             | `MN` | ✅      |
+| `airtel([])`   | AirTel                          | `AT` | ✅      |
+| `zamtel([])`   | ZamTel                          | `ZT` | ✅      |
+| `equitel([])`  | EquiTel                         | `ET` | —       |
+| `mpesa([])`    | MPesa                           | `MP` | ✅      |
+| `orange([])`   | Orange                          | `OG` | —       |
+| `tigo([])`     | Tigo                            | `TG` | —       |
+| `mobile([])`   | Any. Pass `provider` and `code` | —    | ✅      |
 
-Required for every provider: `amount`, `currency`, `phone`, `reference`. `mobile()` also needs `provider` (e.g. `'EcoCash'`) and `code` (e.g. `'EC'`), which lets you route to a provider chosen at runtime:
+Required for every provider: `amount`, `currency`, `phone`, `reference`. Optional: `description` and `countryCode` (defaults to `ZW` — set it for providers outside Zimbabwe, e.g. `'KE'` for M-Pesa).
+
+`mobile()` also needs `provider` (e.g. `'EcoCash'`) and `code` (e.g. `'EC'`), which lets you route to a provider chosen at runtime:
 
 ```php
 $response = $mobile->mobile([
@@ -208,6 +219,34 @@ $response = $mobile->mobile([
 ```
 
 For the redirect flow, construct with `'redirect'` and set `setSuccessUrl()` and `setErrorUrl()`.
+
+### Vouchers
+
+Vouchers behave exactly like [Mobile money](#mobile-money) — same fields, same direct and redirect flows — but route to the voucher provider (`VC`).
+
+```php
+use ContiPay\PhpSdk\Voucher;
+
+$voucher = (new Voucher($apiKey, $apiSecret, 'dev'))
+    ->setMerchantId(116)
+    ->setWebhookUrl('https://shop.test/webhook');
+
+$response = $voucher->voucher([
+    'amount'      => '50.00',
+    'currency'    => 'USD',
+    'phone'       => '0782000340',
+    'reference'   => 'ORDER-1001',
+    'description' => 'Order #1001', // optional
+]);
+```
+
+| Method        | Provider | Code | Currencies               | Payouts |
+|---------------|----------|------|--------------------------|---------|
+| `voucher([])` | Voucher  | `VC` | `ZAR`, `USD`, `ZWG`, `ZMW` | ✅      |
+
+Vouchers only settle in the four currencies above; anything else throws an `InvalidArgumentException` before the request is sent. Mobile providers aren't callable on `Voucher` (and vice versa) — each class exposes only its own provider type, so `$voucher->ecocash()` throws a `BadMethodCallException`.
+
+Payouts to vouchers go through [`Disbursement`](#send-payouts) like any other provider.
 
 ### Cards
 
@@ -280,7 +319,11 @@ $response = $payouts->ecocash([
 ]);
 ```
 
-Supports `ecocash()`, `onemoney()`, `omari()`, `innbucks()` and `mobile()`, with the same provider codes as [Mobile money](#mobile-money). `amount`, `currency`, `phone` and `reference` are always required.
+Supports every provider marked ✅ in the Payouts column of [Mobile money](#mobile-money) — `ecocash()`, `onemoney()`, `omari()`, `innbucks()`, `mtn()`, `airtel()`, `zamtel()`, `mpesa()` and `mobile()` — plus `voucher()`, using the same provider codes. `amount`, `currency`, `phone` and `reference` are always required; `countryCode` is optional and defaults to `ZW`.
+
+TeleCash, EquiTel, Orange and Tigo are acquire-only. Calling them here throws a `BadMethodCallException` rather than sending a payout the provider cannot fulfil. Voucher payouts are limited to the [voucher currencies](#vouchers).
+
+Use `$payouts->providers()` to list the payout providers available at runtime (`$mobile->providers()` and `$voucher->providers()` do the same for collections).
 
 An invalid key throws an `InvalidArgumentException` when you construct the object, so a bad deployment fails at startup instead of at payout time.
 
@@ -288,7 +331,7 @@ An invalid key throws an `InvalidArgumentException` when you construct the objec
 
 ## Check a transaction's status
 
-Every class (`Mobile`, `Card`, `Checkout`, `Disbursement`) can look up a transaction by your reference. Call `setMerchantId()` first, because ContiPay requires it for lookups.
+Every class (`Mobile`, `Voucher`, `Card`, `Checkout`, `Disbursement`) can look up a transaction by your reference. Call `setMerchantId()` first, because ContiPay requires it for lookups.
 
 ```php
 $response = $mobile->getTransactionStatus('ORDER-1001');                // payments
@@ -366,9 +409,9 @@ Errors come in two kinds.
 
 | Exception                  | When                                                                                        |
 |----------------------------|---------------------------------------------------------------------------------------------|
-| `InvalidArgumentException` | A required field is missing, the [amount](#amounts) is invalid, or the payout private key can't be read |
+| `InvalidArgumentException` | A required field is missing, the [amount](#amounts) is invalid, the currency isn't supported by the provider, or the payout private key can't be read |
 | `LogicException`           | A request was made before `setMerchantId()`                                                 |
-| `BadMethodCallException`   | The class has no such provider, e.g. `$mobile->paypal()`                                    |
+| `BadMethodCallException`   | The class has no such provider (e.g. `$mobile->paypal()`), or the provider doesn't support that operation (e.g. `$payouts->tigo()`) |
 
 **2. JSON errors: the request did not succeed.** API rejections come back as ContiPay's own JSON. Network and server failures come back as SDK-built JSON:
 
@@ -414,6 +457,7 @@ The SDK waits 10 seconds to connect and 60 seconds for a response.
 | Class          | Signature                                                            |
 |----------------|----------------------------------------------------------------------|
 | `Mobile`       | `new Mobile($apiKey, $apiSecret, $mode = 'dev', $method = 'direct')` |
+| `Voucher`      | `new Voucher($apiKey, $apiSecret, $mode = 'dev', $method = 'direct')` |
 | `Card`         | `new Card($apiKey, $apiSecret, $mode = 'dev', $method = 'direct')`   |
 | `Checkout`     | `new Checkout($apiKey, $apiSecret, $mode = 'dev')`                   |
 | `Disbursement` | `new Disbursement($apiKey, $apiSecret, $privateKey, $mode = 'dev')`  |
@@ -425,8 +469,8 @@ The SDK waits 10 seconds to connect and 60 seconds for a response.
 |----------------------------------|------------------------------|------------------------------------------|
 | `setMerchantId(int)`             | all                          | Your ContiPay merchant ID (**required**) |
 | `setWebhookUrl(string)`          | all                          | Where ContiPay sends notifications       |
-| `setSuccessUrl(string)`          | `Mobile`, `Card`, `Checkout` | Return URL after paying (redirect flows) |
-| `setErrorUrl(string)`            | `Mobile`, `Card`             | Return URL after a failure or cancel     |
+| `setSuccessUrl(string)`          | `Mobile`, `Voucher`, `Card`, `Checkout` | Return URL after paying (redirect flows) |
+| `setErrorUrl(string)`            | `Mobile`, `Voucher`, `Card`  | Return URL after a failure or cancel     |
 | `setCancelUrl(string)`           | `Checkout`                   | Return URL after cancelling              |
 | `updateContipayURL($dev, $live)` | all                          | Override the API hosts                   |
 

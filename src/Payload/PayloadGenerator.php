@@ -249,6 +249,7 @@ class PayloadGenerator
      * @param string|null $ref         The reference for the transaction (optional).
      * @param string      $description The description for the transaction (optional).
      * @param string      $cell        The cell number (optional).
+     * @param string      $countryCode The payer country code (default: 'ZW').
      *
      * @return array The prepared payment payload.
      */
@@ -258,7 +259,8 @@ class PayloadGenerator
         string $currency = self::DEFAULT_CURRENCY,
         ?string $ref = null,
         string $description = "",
-        string $cell = ""
+        string $cell = "",
+        string $countryCode = self::DEFAULT_COUNTRY_CODE
     ): array {
         $this->assertConfigured(['providerCode' => 'setUpProviders']);
 
@@ -280,7 +282,7 @@ class PayloadGenerator
                 "surname" => '-',
                 "email" => "$account@contipay.co.zw",
                 "cell" => $cell,
-                "countryCode" => self::DEFAULT_COUNTRY_CODE
+                "countryCode" => $countryCode
             ],
             "transaction" => [
                 "providerCode" => $this->providerCode,
@@ -315,6 +317,7 @@ class PayloadGenerator
      * @param string      $cell        The cell number (optional).
      * @param bool        $isCod       Indicates if the transaction is Cash on Delivery (optional).
      * @param bool        $isCoc       Indicates if the transaction is Cash on Collection (optional).
+     * @param string      $countryCode The payer country code (default: 'ZW').
      *
      * @return array The prepared payment payload.
      */
@@ -326,7 +329,8 @@ class PayloadGenerator
         string $description = "",
         string $cell = "",
         bool $isCod = false,
-        bool $isCoc = false
+        bool $isCoc = false,
+        string $countryCode = self::DEFAULT_COUNTRY_CODE
     ): array {
         // If $cell is not provided, use $account
         $cell = ($cell === '') ? $account : $cell;
@@ -352,7 +356,7 @@ class PayloadGenerator
 
                 'email' => "$account@contipay.co.zw",
                 'cell' => $cell,
-                'countryCode' => self::DEFAULT_COUNTRY_CODE,
+                'countryCode' => $countryCode,
             ],
             "currencyCode" => $currency,
             "merchantId" => $this->merchantCode,

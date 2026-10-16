@@ -6,6 +6,7 @@ use ContiPay\PhpSdk\Core\Client as Core;
 use ContiPay\PhpSdk\Payload\PayloadGenerator;
 use ContiPay\PhpSdk\Concerns\HasStatus;
 use ContiPay\PhpSdk\Support\Amount;
+use ContiPay\PhpSdk\Support\ProviderRegistry;
 
 class Disbursement
 {
@@ -38,36 +39,14 @@ class Disbursement
     protected int $merchantId;
 
     /**
-     * Array of supported providers
-     * @var array
+     * Providers this class can pay out through, keyed by method name.
+     *
+     * @return array<string, array{name: string, code: string, capabilities: list<string>, required: list<string>}>
      */
-    protected array $providers = [
-        'ecocash' => [
-            'name' => 'EcoCash',
-            'code' => 'EC',
-            'required' => ['amount', 'currency', 'phone', 'reference'],
-        ],
-        'onemoney' => [
-            'name' => 'OneMoney',
-            'code' => 'OM',
-            'required' => ['amount', 'currency', 'phone', 'reference'],
-        ],
-        'omari' => [
-            'name' => 'Omari',
-            'code' => 'OC',
-            'required' => ['amount', 'currency', 'phone', 'reference'],
-        ],
-        'innbucks' => [
-            'name' => 'InnBucks',
-            'code' => 'IB',
-            'required' => ['amount', 'currency', 'phone', 'reference'],
-        ],
-        'mobile' => [
-            'name' => '',
-            'code' => '',
-            'required' => ['amount', 'currency', 'phone', 'reference', 'provider', 'code'],
-        ],
-    ];
+    public function providers(): array
+    {
+        return ProviderRegistry::supporting(ProviderRegistry::PAYOUT);
+    }
 
     /**
      * Initialize the Contipay instance with API credentials and signing key.
@@ -100,12 +79,16 @@ class Disbursement
      */
     public function __call(string $name, array $arguments): string
     {
-        if (!isset($this->providers[$name])) {
+        if (!ProviderRegistry::has($name)) {
             throw new \BadMethodCallException("Provider '{$name}' not supported.");
         }
 
+        if (!ProviderRegistry::supports($name, ProviderRegistry::PAYOUT)) {
+            throw new \BadMethodCallException("Provider '{$name}' does not support payouts.");
+        }
+
         $fields = $arguments[0] ?? [];
-        $provider = $this->providers[$name];
+        $provider = ProviderRegistry::find($name);
 
         foreach ($provider['required'] as $field) {
             if (empty($fields[$field])) {
@@ -113,10 +96,18 @@ class Disbursement
             }
         }
 
+        if (!ProviderRegistry::supportsCurrency($name, (string) $fields['currency'])) {
+            throw new \InvalidArgumentException(sprintf(
+                "Currency '%s' is not supported by provider '%s'. Supported: %s.",
+                $fields['currency'],
+                $name,
+                implode(', ', $provider['currencies'])
+            ));
+        }
+
         Amount::parse($fields['amount']);
 
-        return $this->processDisbursement(
-            $fields['amount'],
+        return $this->processDisbursement(            $fields['amount'],
             $fields['currency'],
             $fields['phone'],
             $fields['reference'],
@@ -127,6 +118,7 @@ class Disbursement
             $fields['firstName'] ?? '-',
             $fields['lastName'] ?? '-',
             $fields['email'] ?? '',
+            $fields['countryCode'] ?? 'ZW',
         );
     }
 
@@ -206,6 +198,7 @@ class Disbursement
      * @param string $firstName    Recipient first name
      * @param string $lastName     Recipient last name
      * @param string $email        Recipient email
+     * @param string $countryCode  Recipient country code
      * @throws \LogicException If no merchant ID has been set
      * @return string JSON-encoded disbursement response or error
      */
@@ -220,7 +213,8 @@ class Disbursement
         string $accountName = '-',
         string $firstName = '-',
         string $lastName = '-',
-        string $email = ''
+        string $email = '',
+        string $countryCode = 'ZW'
     ): string {
         $merchantId = $this->getMerchantId();
 
@@ -231,7 +225,7 @@ class Disbursement
                 $merchantId,
                 $this->getWebhookUrl(),
             ))
-                ->setUpCustomer($firstName, $lastName, $phone, 'ZW', $email)
+                ->setUpCustomer($firstName, $lastName, $phone, $countryCode, $email)
                 ->setUpProviders($providerName, $providerCode)
                 ->setUpAccountDetails($phone, $accountName)
                 ->setUpTransaction($amount, $currency, $reference, $description)

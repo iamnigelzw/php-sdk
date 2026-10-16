@@ -1,13 +1,20 @@
 <?php
 
-namespace ContiPay\PhpSdk;
+namespace ContiPay\PhpSdk\Payment;
 
 use ContiPay\PhpSdk\Core\Client as Core;
 use ContiPay\PhpSdk\Payload\PayloadGenerator;
 use ContiPay\PhpSdk\Concerns\HasStatus;
 use ContiPay\PhpSdk\Support\Amount;
+use ContiPay\PhpSdk\Support\ProviderRegistry;
 
-class Mobile
+/**
+ * Shared behaviour for wallet-style acquiring classes.
+ *
+ * Subclasses only declare which provider type they route to; everything else —
+ * URLs, merchant ID, payload building and dispatch — lives here.
+ */
+abstract class WalletPayment
 {
     use HasStatus;
 
@@ -18,7 +25,7 @@ class Mobile
     protected ?Core $contipay;
     /**
      * Environment mode of the SDK
-     * @var 
+     * @var string
      */
     protected string $mode = 'dev';
     /**
@@ -26,10 +33,6 @@ class Mobile
      * @var string
      */
     protected string $webhookUrl = '';
-    /**
-     * Success URL of the Contipay instance
-     * @var string
-     */
     /**
      * Success URL of the Contipay instance
      * @var string
@@ -52,36 +55,21 @@ class Mobile
     protected string $method;
 
     /**
-     * Array of supported providers
-     * @var array
+     * The provider type this class routes to.
+     *
+     * @return string One of the ProviderRegistry::TYPE_* constants
      */
-    protected array $providers = [
-        'ecocash' => [
-            'name' => 'EcoCash',
-            'code' => 'EC',
-            'required' => ['amount', 'currency', 'phone', 'reference'],
-        ],
-        'onemoney' => [
-            'name' => 'OneMoney',
-            'code' => 'OM',
-            'required' => ['amount', 'currency', 'phone', 'reference'],
-        ],
-        'omari' => [
-            'name' => 'Omari',
-            'code' => 'OC',
-            'required' => ['amount', 'currency', 'phone', 'reference'],
-        ],
-        'innbucks' => [
-            'name' => 'InnBucks',
-            'code' => 'IB',
-            'required' => ['amount', 'currency', 'phone', 'reference'],
-        ],
-        'mobile' => [
-            'name' => '',
-            'code' => '',
-            'required' => ['amount', 'currency', 'phone', 'reference', 'provider', 'code'],
-        ],
-    ];
+    abstract protected function providerType(): string;
+
+    /**
+     * Providers this class can collect payments through, keyed by method name.
+     *
+     * @return array<string, array{name: string, code: string, type: string, capabilities: list<string>, required: list<string>, currencies: list<string>|null}>
+     */
+    public function providers(): array
+    {
+        return ProviderRegistry::supporting(ProviderRegistry::ACQUIRE, $this->providerType());
+    }
 
 
     /**
@@ -108,17 +96,31 @@ class Mobile
      */
     public function __call(string $name, array $arguments): string
     {
-        if (!isset($this->providers[$name])) {
+        $provider = ProviderRegistry::find($name);
+
+        if ($provider === null || $provider['type'] !== $this->providerType()) {
             throw new \BadMethodCallException("Provider '{$name}' not supported.");
         }
 
+        if (!ProviderRegistry::supports($name, ProviderRegistry::ACQUIRE)) {
+            throw new \BadMethodCallException("Provider '{$name}' does not support payments.");
+        }
+
         $fields = $arguments[0] ?? [];
-        $provider = $this->providers[$name];
 
         foreach ($provider['required'] as $field) {
             if (empty($fields[$field])) {
                 throw new \InvalidArgumentException("Missing required field: {$field} for provider '{$name}'");
             }
+        }
+
+        if (!ProviderRegistry::supportsCurrency($name, (string) $fields['currency'])) {
+            throw new \InvalidArgumentException(sprintf(
+                "Currency '%s' is not supported by provider '%s'. Supported: %s.",
+                $fields['currency'],
+                $name,
+                implode(', ', $provider['currencies'])
+            ));
         }
 
         Amount::parse($fields['amount']);
@@ -130,7 +132,8 @@ class Mobile
             $fields['reference'] ?? '',
             $fields['description'] ?? 'Payment',
             $provider['name'] == '' ? $fields['provider'] : $provider['name'],
-            $provider['code'] == '' ? $fields['code'] : $provider['code']
+            $provider['code'] == '' ? $fields['code'] : $provider['code'],
+            $fields['countryCode'] ?? 'ZW'
         );
     }
 
@@ -250,6 +253,9 @@ class Mobile
      * @param string $phone       Payer phone number
      * @param string $reference   Payment reference (optional)
      * @param string $description Payment description (optional)
+     * @param string $providerName Provider name
+     * @param string $providerCode Provider code
+     * @param string $countryCode  Payer country code (optional)
      * @throws \LogicException If no merchant ID has been set
      * @return string JSON-encoded payment response or error
      */
@@ -260,7 +266,8 @@ class Mobile
         string $reference = '',
         string $description = 'Donation',
         string $providerName = 'EcoCash',
-        string $providerCode = 'EC'
+        string $providerCode = 'EC',
+        string $countryCode = 'ZW'
     ): string {
         $merchantId = $this->getMerchantId();
 
@@ -277,7 +284,9 @@ class Mobile
                     $phone,
                     $currency,
                     $reference,
-                    $description
+                    $description,
+                    '',
+                    $countryCode
                 ) :
                 ((new PayloadGenerator(
                     $merchantId,
@@ -289,7 +298,11 @@ class Mobile
                         $phone,
                         $currency,
                         $reference,
-                        $description
+                        $description,
+                        '',
+                        false,
+                        false,
+                        $countryCode
                     ));
 
             $response = $this->contipay
